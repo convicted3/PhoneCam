@@ -23,6 +23,8 @@ def variant(lang):  # 0 ru, 1 en, 2 uk
     d = {} if lang == 0 else {ru: ([en, None] if lang == 1 else [None, uk]) for ru, (en, uk) in WT.items() if not ru.startswith('BOT_')}
     a = html.index('/*I18N*/'); b = html.index('/*I18N_END*/')
     h = html[:a] + '/*I18N*/' + json.dumps(d, ensure_ascii=False) + html[b:]
+    a = h.index('/*PL*/'); b = h.index('/*PL_END*/')
+    h = h[:a] + str(lang) + h[b + len('/*PL_END*/'):]
     return gzip.compress(minify(h).encode('utf-8'), 9, mtime=0)
 pages = [variant(i) for i in range(3)]
 page_gz = max(pages, key=len)
@@ -62,19 +64,40 @@ async function hookSecret(env) {
   return Array.from(d.slice(0, 16), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+const LANG_ROW = [["RU", "ru"], ["EN", "en"], ["UA", "uk"]];
+function botMarkup(origin, L, code) {
+  const q = "?lang=" + ["ru", "en", "uk"][L] + (code ? "&code=" + code : "");
+  return {
+    inline_keyboard: [
+      [{ text: BOT_TEXT.button[L], web_app: { url: origin + "/" + q } }],
+      LANG_ROW.map(([label, lc]) => ({ text: (botLang(lc) === L ? "• " : "") + label, callback_data: "lang:" + lc + ":" + (code || "") })),
+    ],
+  };
+}
+
 async function onUpdate(env, origin, u) {
+  const cq = u.callback_query;
+  if (cq && cq.message && /^lang:/.test(cq.data || "")) {
+    const [, lc, code] = cq.data.split(":");
+    const L = botLang(lc);
+    await tg(env, "editMessageText", {
+      chat_id: cq.message.chat.id, message_id: cq.message.message_id, text: BOT_TEXT.welcome[L], parse_mode: "HTML",
+      reply_markup: botMarkup(origin, L, code),
+    }).catch(() => {});
+    await tg(env, "answerCallbackQuery", { callback_query_id: cq.id }).catch(() => {});
+    return;
+  }
   const m = u.message;
   if (!m || !m.chat || m.chat.type !== "private") return;
   const text = (m.text || "").trim();
   // /start ABCD2345 (deep link from the PC QR code) opens the page with that code
   const arg = text.startsWith("/start ") ? text.slice(7).trim().toUpperCase().replace(/[^A-Z0-9]/g, "") : "";
-  const url = origin + "/" + (arg.length === 8 ? "?code=" + arg : "");
   const L = botLang(m.from && m.from.language_code);
   await tg(env, "sendMessage", {
     chat_id: m.chat.id,
     text: BOT_TEXT.welcome[L],
     parse_mode: "HTML",
-    reply_markup: { inline_keyboard: [[{ text: BOT_TEXT.button[L], web_app: { url } }]] },
+    reply_markup: botMarkup(origin, L, arg.length === 8 ? arg : ""),
   });
 }
 
@@ -97,7 +120,7 @@ export default {
         return new Response("Добавь секрет BOT_TOKEN: Settings -> Variables and Secrets -> Add -> Secret, имя BOT_TOKEN, значение - токен от @BotFather. Потом Deploy и открой эту страницу ещё раз.",
           { headers: { "content-type": "text/plain; charset=utf-8" } });
       const hook = await tg(env, "setWebhook", {
-        url: url.origin + "/tg", secret_token: await hookSecret(env), allowed_updates: ["message"], drop_pending_updates: true,
+        url: url.origin + "/tg", secret_token: await hookSecret(env), allowed_updates: ["message", "callback_query"], drop_pending_updates: true,
       });
       const menu = await tg(env, "setChatMenuButton", {
         menu_button: { type: "web_app", text: BOT_TEXT.menu[0], web_app: { url: url.origin + "/" } },
