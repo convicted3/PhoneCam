@@ -72,8 +72,6 @@ input[type=range]{flex:1;padding:0;border:0;background:none;accent-color:var(--a
 const $ = id => document.getElementById(id);
 // ---- language: Telegram's or the phone's (Russian / Ukrainian / English)
 const I18N = /*I18N*/{"Подсветка": ["Screen light", "Підсвітка"], "Фонарик": ["Flashlight", "Ліхтарик"], "Основная": ["Main", "Основна"], "Фронтальная": ["Front", "Фронтальна"], "Широкая": ["Wide", "Широка"], "Камера": ["Camera", "Камера"], "Камера: ": ["Camera: ", "Камера: "], "в эфире": ["live", "в ефірі"], "Камера передаётся на ПК": ["The camera is streaming to the PC", "Камера передається на ПК"], "переподключение": ["reconnecting", "перепідключення"], "Связь с ПК потеряна, переподключаюсь…": ["Lost the PC, reconnecting…", "Зв'язок із ПК втрачено, перепідключаюсь…"], "Нет связи с сервером. Проверь интернет на телефоне.": ["No connection to the server. Check the phone's internet.", "Немає зв'язку із сервером. Перевір інтернет на телефоні."], "Ищу ПК с кодом ": ["Looking for the PC with code ", "Шукаю ПК з кодом "], "… Открой PhoneCam на ПК и выбери «Телеграм».": ["… Open PhoneCam on the PC and choose \"Telegram\".", "… Відкрий PhoneCam на ПК і обери «Телеграм»."], "ждём ПК": ["waiting for PC", "чекаємо ПК"], "Программа на ПК остановлена. Жду, когда её снова запустят…": ["The PC app stopped. Waiting for it to start again…", "Програму на ПК зупинено. Чекаю, коли її знову запустять…"], "ПК найден, соединяюсь…": ["PC found, connecting…", "ПК знайдено, з'єднуюсь…"], "Ошибка соединения: ": ["Connection error: ", "Помилка з'єднання: "], "сеть": ["network", "мережа"], "процессор телефона": ["phone CPU", "процесор телефона"], "другое": ["other", "інше"], " к/с, ": [" fps, ", " к/с, "], " Мбит/с": [" Mbit/s", " Мбіт/с"], ", цель ": [", target ", ", ціль "], ", кодер ": [", encoder ", ", кодер "], ", ограничивает: ": [", limited by: ", ", обмежує: "], "Код - 8 символов, как на экране ПК (например ABCD-2345)": ["The code is 8 characters, as on the PC screen (e.g. ABCD-2345)", "Код - 8 символів, як на екрані ПК (наприклад ABCD-2345)"], "подключение": ["connecting", "підключення"], "Включаю камеру…": ["Starting the camera…", "Вмикаю камеру…"], "не подключено": ["not connected", "не підключено"], "Нет доступа к камере. Разреши камеру для Телеграма/браузера в настройках телефона.": ["No camera access. Allow the camera for Telegram/the browser in the phone settings.", "Немає доступу до камери. Дозволь камеру для Телеграма/браузера в налаштуваннях телефона."], "Камера не включилась: ": ["The camera didn't start: ", "Камера не ввімкнулася: "], "Подключаюсь к серверу…": ["Connecting to the server…", "Підключаюсь до сервера…"], "Сервер не отвечает. Проверь интернет на телефоне.": ["The server doesn't answer. Check the phone's internet.", "Сервер не відповідає. Перевір інтернет на телефоні."], "Наведи на QR-код в программе PhoneCam на ПК": ["Point at the QR code in the PhoneCam app on the PC", "Наведи на QR-код у програмі PhoneCam на ПК"], "Нажми «Сканировать QR-код» или введи код с экрана ПК.": ["Tap \"Scan QR code\" or enter the code from the PC screen.", "Натисни «Сканувати QR-код» або введи код з екрана ПК."], "Введи код с экрана ПК.": ["Enter the code from the PC screen.", "Введи код з екрана ПК."], "Камера включится после подключения": ["The camera starts after connecting", "Камера ввімкнеться після підключення"], "Подключить": ["Connect", "Підключити"], "Сканировать QR-код с экрана ПК": ["Scan the QR code on the PC screen", "Сканувати QR-код з екрана ПК"], "В программе PhoneCam на ПК выбери «Телеграм» - там будет QR-код и код для ввода.": ["In the PhoneCam app on the PC choose \"Telegram\" - it shows a QR code and a code to enter.", "У програмі PhoneCam на ПК обери «Телеграм» - там буде QR-код і код для введення."], "Затемнить": ["Dim", "Затемнити"], "Отключиться": ["Disconnect", "Відключитися"], "Не сворачивай приложение и не блокируй экран - иначе камера выключится.": ["Don't minimize the app or lock the screen - otherwise the camera stops.", "Не згортай застосунок і не блокуй екран - інакше камера вимкнеться."], "Нажми, чтобы вернуть экран": ["Tap to bring the screen back", "Натисни, щоб повернути екран"]}/*I18N_END*/;
-// The server sends one page per language (PAGE_LANG); -1 = this file with every language (development).
-const PAGE_LANG = /*PL*/-1/*PL_END*/;
 const LCODES = ["ru", "en", "uk"];
 let LANG = 0;  // 0 ru, 1 en, 2 uk
 function langFrom(code) { code = String(code || "").toLowerCase(); return /^(ru|be|kk)/.test(code) ? 0 : /^uk/.test(code) ? 2 : 1; }
@@ -84,19 +82,13 @@ function applyLang(code) {
   document.querySelectorAll("[data-t]").forEach(el => { el.textContent = t(el.dataset.t); });
   document.querySelectorAll("#langs button").forEach(b => b.classList.toggle("on", b.dataset.l === LCODES[LANG]));
 }
-function pageWithLang(code) {
-  const p = new URLSearchParams(location.search); p.set("lang", code);
-  return location.pathname + "?" + p.toString() + location.hash;
-}
 let langPref = null;
 try { langPref = localStorage.getItem("phonecam.lang"); } catch (e) {}
 const wantLang = langPref || new URLSearchParams(location.search).get("lang") || navigator.language;
-if (PAGE_LANG >= 0 && langFrom(wantLang) !== PAGE_LANG) location.replace(pageWithLang(LCODES[langFrom(wantLang)]));
-applyLang(PAGE_LANG >= 0 ? LCODES[PAGE_LANG] : wantLang);
+applyLang(wantLang);
 document.querySelectorAll("#langs button").forEach(b => b.onclick = () => {
   try { localStorage.setItem("phonecam.lang", b.dataset.l); } catch (e) {}
-  if (PAGE_LANG < 0) { applyLang(b.dataset.l); return; }
-  if (langFrom(b.dataset.l) !== PAGE_LANG) location.replace(pageWithLang(b.dataset.l));
+  applyLang(b.dataset.l);  // no reload: reloading would ask for the camera again
 });
 // Telegram's script is loaded without blocking the page (boot() waits for it a little)
 let tg = null, inTg = /tgWebApp/.test(location.hash + location.search);
@@ -231,7 +223,31 @@ function constraintsFor(cfg) {
   else v.facingMode = { ideal: "environment" };
   return { video: v, audio: false };
 }
+// Every getUserMedia() call can show the camera permission prompt again (Telegram on iOS asks each time),
+// so the running track is adjusted with applyConstraints() whenever possible.
+let camOf = null;  // which camera the current track is ("back" | "front" | "wide")
+async function adjustCamera() {
+  if (!S.track || S.track.readyState !== "live") return false;
+  const c = constraintsFor(S.cfg).video;
+  try {
+    if (camOf !== S.cfg.cam) {
+      if (S.cfg.cam === "wide" || camOf === "wide") return false;  // needs another device
+      await S.track.applyConstraints({ facingMode: { exact: S.cfg.cam === "front" ? "user" : "environment" }, width: c.width, height: c.height, frameRate: c.frameRate });
+      const fm = (S.track.getSettings && S.track.getSettings().facingMode) || "";
+      if (fm && fm !== (S.cfg.cam === "front" ? "user" : "environment")) return false;
+      if (!fm) return false;
+    } else {
+      await S.track.applyConstraints({ width: c.width, height: c.height, frameRate: c.frameRate });
+    }
+  } catch (e) { return camOf === S.cfg.cam; }  // same camera: keep it even if the size couldn't change
+  camOf = S.cfg.cam;
+  $("v").style.transform = S.cfg.cam === "front" ? "scaleX(-1)" : "";
+  readCaps();
+  applySenderParams();
+  return true;
+}
 async function startCamera() {
+  if (await adjustCamera()) return;
   if (S.track) { S.track.stop(); S.track = null; }
   if (S.stream) S.stream.getTracks().forEach(t => t.stop());
   let st;
@@ -240,7 +256,7 @@ async function startCamera() {
     if (S.cfg.cam === "wide") { S.cfg.cam = "back"; st = await navigator.mediaDevices.getUserMedia(constraintsFor(S.cfg)); }
     else throw e;
   }
-  S.stream = st; S.track = st.getVideoTracks()[0];
+  S.stream = st; S.track = st.getVideoTracks()[0]; camOf = S.cfg.cam;
   try { S.track.contentHint = "motion"; } catch (e) {}
   $("v").srcObject = st; $("ph").classList.add("hidden");
   $("v").style.transform = S.cfg.cam === "front" ? "scaleX(-1)" : "";
@@ -476,7 +492,7 @@ function stop(ui = true) {
   closePeer();
   S.brokers.forEach(b => b.close()); S.brokers = [];
   if (S.stream) S.stream.getTracks().forEach(t => t.stop());
-  S.stream = null; S.track = null;
+  S.stream = null; S.track = null; camOf = null;
   $("light").style.display = "none";
   try { S.wake && S.wake.release(); } catch (e) {}
   if (ui) { showCtl(false); setPill(t("не подключено")); setStatus(""); $("ph").classList.remove("hidden"); $("v").srcObject = null; }

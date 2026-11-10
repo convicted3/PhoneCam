@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
                (unsigned long long)s.packets, (unsigned long long)s.bytes * 8 / 1000, (unsigned long long)s.lost,
                (unsigned long long)s.nacks, (unsigned long long)s.plis, (unsigned long long)s.dropped_frames);
         fflush(stdout);
-        if (i == 5) link.SendLine("TORCH 1");
+        if (i == 3) link.SetConfig(1920, 1080, 30, 6000, "back");
         
     }
     link.Stop();

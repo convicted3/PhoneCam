@@ -1,5 +1,6 @@
 # Builds worker.js (Cloudflare Worker that serves the phone page) from phone.html.
 import base64, gzip, json, os, re
+import brotli  # pip install brotli
 here = os.path.dirname(os.path.abspath(__file__))
 import sys
 sys.path.insert(0, os.path.join(here, '..', 'i18n'))
@@ -18,16 +19,9 @@ def minify(s):
     s = s[:js.start(1)] + '\n'.join(lines) + s[js.end(1):]
     return re.sub(r'>\s+<', '><', s)
 
-# one pre-compressed page per language (only that language's dictionary), to stay small
-def variant(lang):  # 0 ru, 1 en, 2 uk
-    d = {} if lang == 0 else {ru: ([en, None] if lang == 1 else [None, uk]) for ru, (en, uk) in WT.items() if not ru.startswith('BOT_')}
-    a = html.index('/*I18N*/'); b = html.index('/*I18N_END*/')
-    h = html[:a] + '/*I18N*/' + json.dumps(d, ensure_ascii=False) + html[b:]
-    a = h.index('/*PL*/'); b = h.index('/*PL_END*/')
-    h = h[:a] + str(lang) + h[b + len('/*PL_END*/'):]
-    return gzip.compress(minify(h).encode('utf-8'), 9, mtime=0)
-pages = [variant(i) for i in range(3)]
-page_gz = max(pages, key=len)
+# the page carries every language (switching must not reload it: a reload asks for the camera again)
+_min = minify(html).encode('utf-8')
+pages = [brotli.compress(_min, quality=11), gzip.compress(_min, 9, mtime=0)]  # [br, gzip]
 page_b64 = json.dumps([base64.b64encode(p).decode() for p in pages])
 
 RU_WELCOME = ("<b>PhoneCam</b> - телефон как вебкамера для ПК и OBS.\n\n"
@@ -44,7 +38,7 @@ BOT = {
 js = '''// PhoneCam - phone page for Telegram / browser + Telegram bot. Paste this whole file into the Cloudflare Worker editor.
 // Bot: put the token from @BotFather into Settings -> Variables and Secrets as a Secret named BOT_TOKEN,
 // then open https://<this worker>/setup once.
-const PAGES_GZ = %s;  // phone.html per language [ru, en, uk], minified + gzip
+const PAGES_GZ = %s;  // phone.html minified: [brotli, gzip]
 const PAGES = PAGES_GZ.map((b) => Uint8Array.from(atob(b), (c) => c.charCodeAt(0)));
 
 const BOT_TEXT = %s;  // [ru, en, uk]
@@ -137,14 +131,14 @@ export default {
         { headers: { "content-type": "text/plain; charset=utf-8" } });
     }
 
-    const want = url.searchParams.get("lang") || (request.headers.get("accept-language") || "ru").split(",")[0];
-    return new Response(PAGES[botLang(want)], {
+    const br = (request.headers.get("accept-encoding") || "").split(",").some((e) => e.trim().split(";")[0] === "br");
+    return new Response(PAGES[br ? 0 : 1], {
       encodeBody: "manual",
       headers: {
         "content-type": "text/html; charset=utf-8",
-        "content-encoding": "gzip",
+        "content-encoding": br ? "br" : "gzip",
+        "vary": "accept-encoding",
         "cache-control": "no-cache",
-        "vary": "accept-language",
         "permissions-policy": "camera=(self)",
       },
     });
