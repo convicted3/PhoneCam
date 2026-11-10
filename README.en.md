@@ -43,7 +43,7 @@
 2. **Android:** download [`PhoneCam.apk`](https://github.com/convicted3/phonecam/releases/latest/download/PhoneCam.apk) on the phone, install and open it.
    **iPhone / no app:** open the [@phonecamweb_bot](https://t.me/phonecamweb_bot) bot in Telegram.
 3. In the PC program choose Wi-Fi, USB or Telegram and click "Connect".
-4. Webcam for other apps: ⚙ → "Install webcam". OBS: run `OBS plugin\Установить в OBS.bat` (the plugin installer).
+4. Webcam for other apps: ⚙ → "Install webcam". OBS: run `OBS plugin\Install OBS plugin.bat` (remove with `Uninstall OBS plugin.bat`).
 
 <details>
 <summary><b>Windows says "The publisher could not be verified" on every launch</b></summary>
@@ -114,6 +114,12 @@ For the bot, add a `BOT_TOKEN` secret (token from @BotFather) to the Worker and 
 
 **Translations:** strings live in `i18n/pc_strings.py`, `i18n/android_strings.py`, `i18n/web_strings.py`
 (Russian source text -> English, Ukrainian). After editing run `python3 i18n/gen.py`.
+
+## Code signing and privacy
+
+[Code signing policy](CODE_SIGNING_POLICY.md) · [Privacy policy](PRIVACY.md)
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 
 ## License
 

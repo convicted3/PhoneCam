@@ -3,3 +3,8 @@ pc/build/
 android/tools/android.jar
 android/tools/dx-*.jar
 *.keystore
+third_party/webrtc/lib/
+third_party/webrtc/include/
+third_party/.webrtc-build/
+pc/third_party/libobs.a
+dist/

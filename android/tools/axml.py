@@ -173,4 +173,10 @@ if __name__ == "__main__":
     out = sys.argv[1]
     icon = int(sys.argv[2], 16) if len(sys.argv) > 2 else None
     with open(out, "wb") as f:
-        f.write(phonecam_manifest("com.phonecam.app", 1, "1.0", "PhoneCam", icon))
+        # version from the repository's VERSION file: "1.2.3" -> versionCode 10203
+        import os
+        vf = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "VERSION")
+        ver = open(vf).read().strip() if os.path.exists(vf) else "1.0.0"
+        parts = [int(x) for x in (ver.split(".") + ["0", "0"])[:3]]
+        code = parts[0] * 10000 + parts[1] * 100 + parts[2]
+        f.write(phonecam_manifest("com.phonecam.app", code, ver, "PhoneCam", icon))

@@ -1,0 +1,96 @@
+# Builds PhoneCam from source on every version tag (v1.2.3), signs the Windows binaries through SignPath
+# (when configured) and publishes a GitHub release with PhoneCam-Windows.zip and PhoneCam.apk.
+name: Build and release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q ninja-build cmake zip openjdk-17-jdk-headless
+          pip install ziglang==0.17.0 Pillow==11.0.0
+
+      - name: Check that the tag matches VERSION
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: test "v$(cat VERSION)" = "${GITHUB_REF_NAME}"
+
+      - name: Build Windows program, virtual webcam and OBS plugin
+        run: bash pc/build.sh
+
+      - name: Build Android app
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/phonecam.keystore"
+            export PHONECAM_KEYSTORE="$RUNNER_TEMP/phonecam.keystore"
+            export PHONECAM_KEYSTORE_PASS="${{ secrets.ANDROID_KEYSTORE_PASS }}"
+          fi
+          bash android/build.sh
+
+      - name: Upload unsigned Windows binaries
+        id: unsigned
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-unsigned
+          path: |
+            pc/build/PhoneCam.exe
+            pc/build/PhoneCamVirtual64.dll
+            pc/build/PhoneCamVirtual32.dll
+            pc/build/phonecam-obs.dll
+
+      - name: Sign Windows binaries (SignPath)
+        if: env.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'phonecam' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG || 'release-signing' }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Use signed binaries
+        if: env.SIGNPATH_API_TOKEN != ''
+        run: cp -f signed/* pc/build/
+
+      - name: Package
+        run: bash packaging/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PhoneCam
+          path: dist/*
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files="dist/PhoneCam-Windows.zip"
+          # only publish the APK when it is signed with the project's own key (otherwise it would not update old installs)
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then files="$files dist/PhoneCam.apk"; fi
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" $files --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" $files --title "PhoneCam ${GITHUB_REF_NAME#v}" --notes-file packaging/RELEASE_NOTES.md
+          fi

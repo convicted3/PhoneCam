@@ -1,0 +1,90 @@
+﻿PhoneCam - your phone as a webcam for PC and OBS (free)
+=======================================================
+
+What's inside
+  Windows\          - the Windows 10/11 program (keep all 3 files in one folder)
+  OBS plugin\       - plugin for OBS Studio 28 and newer
+  The phone app (PhoneCam.apk) is a separate download.
+
+
+1. PHONE
+  - Install PhoneCam.apk on the phone (separate download). If Android or Play Protect
+    warns you - that's normal for apps outside the store:
+    "More details" -> "Install anyway".
+  - Open the app and allow camera access.
+  - The screen shows an IP address (e.g. 192.168.1.23).
+    The phone and the PC must be on the same Wi-Fi network.
+  - Don't minimize the app while streaming (Android would turn the camera off).
+    You can dim the screen with the "Dim" button.
+
+
+2. PC PROGRAM
+  - Run Windows\PhoneCam.exe.
+  - Enter the IP from the phone screen or click "Find". When the phone answers,
+    the camera settings become available.
+  - Click "Connect".
+  - To use the phone as a webcam in Discord, Zoom, Telegram, a browser, etc.:
+    click the yellow "webcam is not installed" card (or the gear ⚙)
+    -> "Install webcam" (Windows asks for administrator rights).
+    Then pick the "PhoneCam" camera in that app.
+  - Gear ⚙ - picture settings (exposure, white balance, brightness,
+    contrast, temperature, etc.). ☀/☾ - light/dark theme.
+
+
+3. OBS (works without the PC program)
+  - Close OBS and run "OBS plugin\Install OBS plugin.bat".
+    To remove the plugin: "OBS plugin\Uninstall OBS plugin.bat".
+  - In OBS: Sources -> "+" -> "PhoneCam (phone camera)".
+  - Enter the IP or click "Find phone on the network".
+  - The PC program and OBS can't be connected to the phone at the same time.
+
+
+4. GOOD TO KNOW
+  - 60 FPS via high-speed capture (experimental): for phones whose camera
+    gives only 30 frames. Works best in good light.
+  - PhoneCam Smart Brightness: brightens the picture by itself in low light.
+  - Front camera: a white screen light instead of the flashlight.
+  - If the flashlight or zoom doesn't respond - reconnect.
+  - The phone battery level is shown in the PC program (right of "Connection")
+    and in the tray icon menu. You get a notification at 15% and 5%.
+  - Program language: ⚙ -> "Language" (русский, English, українська).
+    The phone app and the bot use the phone's language, the OBS plugin uses OBS's.
+
+
+5. iPHONE AND ANY PHONE - VIA TELEGRAM (no app to install)
+  - In the PC program choose "Telegram" and click "Connect" -
+    a QR code and a code like ABCD-2345 appear on the right.
+  - Point the phone's normal camera at the QR code - the @phonecamweb_bot bot
+    opens in Telegram -> "Start" -> "Open camera".
+    Or open the bot yourself -> "Scan QR code" (or type the code).
+  - Allow camera access. Everything else works as usual: webcam, OBS, settings.
+  - The code is remembered: next time the bot connects by itself.
+  - Downsides compared to the app: no 60 FPS via high-speed capture,
+    the bitrate is picked automatically, flashlight and zoom don't work on every phone.
+    Don't minimize Telegram or lock the screen.
+  - The PC needs internet access (to find the phone); video goes directly.
+
+6. OVER USB (lower latency, no Wi-Fi needed)
+  - Enable "USB debugging" on the phone (Settings -> About phone ->
+    tap "Build number" 7 times -> "Developer options" -> "USB debugging").
+  - Download Android Platform Tools (free, from Google):
+    https://developer.android.com/tools/releases/platform-tools
+    Put adb.exe, AdbWinApi.dll, AdbWinUsbApi.dll next to PhoneCam.exe
+    (for OBS - unpack the platform-tools folder to C:\platform-tools).
+  - Plug in the cable, allow debugging on the phone, choose "USB".
+
+
+Troubleshooting
+  - "Phone not found": is the app open? Same Wi-Fi? Windows Firewall
+    may ask for permission - allow it for private networks. Guest networks and
+    some routers don't let devices see each other.
+  - "Windows H.264 decoder not found": you have Windows N - install the Media Feature Pack.
+  - Laggy over Wi-Fi: lower the quality or connect over USB.
+
+If Windows warns on every launch ("The publisher could not be verified")
+  - Unpack the archive with 7-Zip (https://7-zip.org) - then there are
+    no warnings.
+  - Or: right-click PhoneCam.exe -> Properties -> tick
+    "Unblock" -> OK (once).
+
+Ports: TCP 5757 (video), UDP 5758 (phone discovery).

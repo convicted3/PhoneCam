@@ -43,7 +43,7 @@
 2. **Android:** скачай на телефон [`PhoneCam.apk`](https://github.com/convicted3/phonecam/releases/latest/download/PhoneCam.apk), установи и открой.
    **iPhone / без приложения:** открой бота [@phonecamweb_bot](https://t.me/phonecamweb_bot) в Телеграме.
 3. В программе на ПК выбери Wi-Fi, USB или Телеграм и нажми «Подключить».
-4. Вебка для других программ: ⚙ → «Установить вебку». OBS: `OBS plugin\Установить в OBS.bat`.
+4. Вебка для других программ: ⚙ → «Установить вебку». OBS: `OBS plugin\Install OBS plugin.bat` (удалить - `Uninstall OBS plugin.bat`).
 
 <details>
 <summary><b>Windows пишет «Не удаётся проверить издателя» при каждом запуске</b></summary>
@@ -114,6 +114,10 @@ python3 web/build_worker.py   # -> web/worker.js, вставить в Cloudflare
 
 **Переводы:** строки лежат в `i18n/pc_strings.py`, `i18n/android_strings.py`, `i18n/web_strings.py`
 (русский текст -> английский, украинский). После правки: `python3 i18n/gen.py`.
+
+## Подпись кода и конфиденциальность
+
+[Политика подписи кода](CODE_SIGNING_POLICY.md) (Code signing policy) · [Политика конфиденциальности](PRIVACY.md)
 
 ## Лицензия
 

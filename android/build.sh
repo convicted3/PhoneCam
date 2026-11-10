@@ -27,11 +27,12 @@ echo "[4/5] zip"
 
 echo "[5/5] sign"
 KS=${PHONECAM_KEYSTORE:-tools/phonecam.keystore}
+KP=${PHONECAM_KEYSTORE_PASS:-phonecam}
 if [ ! -f "$KS" ]; then
-    keytool -genkeypair -keystore "$KS" -storepass phonecam -keypass phonecam -alias phonecam \
+    keytool -genkeypair -keystore "$KS" -storepass "$KP" -keypass "$KP" -alias phonecam \
         -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=PhoneCam" >/dev/null 2>&1
 fi
 cp "$OUT/unsigned.apk" "$OUT/PhoneCam.apk"
-jarsigner -keystore "$KS" -storepass phonecam -keypass phonecam -sigalg SHA256withRSA -digestalg SHA-256 \
+jarsigner -keystore "$KS" -storepass "$KP" -keypass "$KP" -sigalg SHA256withRSA -digestalg SHA-256 \
     "$OUT/PhoneCam.apk" phonecam >/dev/null
 echo "OK -> $OUT/PhoneCam.apk"

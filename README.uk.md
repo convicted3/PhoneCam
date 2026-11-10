@@ -43,7 +43,7 @@
 2. **Android:** завантаж на телефон [`PhoneCam.apk`](https://github.com/convicted3/phonecam/releases/latest/download/PhoneCam.apk), встанови й відкрий.
    **iPhone / без застосунку:** відкрий бота [@phonecamweb_bot](https://t.me/phonecamweb_bot) у Телеграмі.
 3. У програмі на ПК обери Wi-Fi, USB або Телеграм і натисни «Підключити».
-4. Вебка для інших програм: ⚙ → «Встановити вебку». OBS: `OBS plugin\Установить в OBS.bat` (встановлювач плагіна).
+4. Вебка для інших програм: ⚙ → «Встановити вебку». OBS: `OBS plugin\Install OBS plugin.bat` (видалити - `Uninstall OBS plugin.bat`).
 
 <details>
 <summary><b>Windows пише «Не вдалося перевірити видавця» при кожному запуску</b></summary>
@@ -114,6 +114,10 @@ python3 web/build_worker.py   # -> web/worker.js, вставити в Cloudflare
 
 **Переклади:** рядки лежать у `i18n/pc_strings.py`, `i18n/android_strings.py`, `i18n/web_strings.py`
 (російський текст -> англійська, українська). Після правки: `python3 i18n/gen.py`.
+
+## Підпис коду та конфіденційність
+
+[Політика підпису коду](CODE_SIGNING_POLICY.md) (Code signing policy) · [Політика конфіденційності](PRIVACY.md)
 
 ## Ліцензія
 
