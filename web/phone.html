@@ -1,0 +1,507 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>PhoneCam</title>
+<style>
+:root{--bg:#0f1115;--panel:#181b22;--text:#eef0f4;--sub:#9aa2b1;--accent:#4cc98c;--accent-text:#0a1610;--border:#2a2f3a;--err:#f06e64;--warn:#e8a828}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:15px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100%;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+header{display:flex;align-items:center;gap:10px;padding:10px 16px}
+.logo{font-weight:800;font-size:20px;letter-spacing:.2px}.logo b{color:var(--accent)}
+#pill{margin-left:auto;font-size:12px;padding:4px 10px;border-radius:99px;background:var(--panel);color:var(--sub);border:1px solid var(--border);white-space:nowrap}
+#pill.ok{color:var(--accent);border-color:var(--accent)}#pill.err{color:var(--err);border-color:var(--err)}
+#stage{position:relative;flex:1;min-height:0;margin:0 16px;border-radius:16px;overflow:hidden;background:#000}
+video{width:100%;height:100%;object-fit:contain;background:#000}
+#ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--sub);text-align:center;padding:24px}
+#panel{padding:12px 16px 14px}
+#status{color:var(--sub);font-size:13px;min-height:19px;margin-bottom:10px}
+#status.err{color:var(--err)}
+.row{display:flex;gap:8px;align-items:center}
+input{flex:1;min-width:0;background:var(--panel);border:1px solid var(--border);color:var(--text);border-radius:12px;padding:12px 14px;font:600 18px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:2px;text-transform:uppercase;outline:none}
+input:focus{border-color:var(--accent)}
+button{appearance:none;border:1px solid var(--border);background:var(--panel);color:var(--text);border-radius:12px;padding:12px 14px;font:600 15px/1 inherit;cursor:pointer;white-space:nowrap}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-text)}
+button.on{border-color:var(--accent);color:var(--accent)}
+button:disabled{opacity:.45}
+.full{width:100%;margin-top:8px}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.grid button{padding:12px 6px;font-size:14px}
+#zoomrow{margin-top:10px;gap:12px}
+#zoomrow span{color:var(--sub);font-size:13px;min-width:44px;text-align:right}
+input[type=range]{flex:1;padding:0;border:0;background:none;accent-color:var(--accent);height:28px;letter-spacing:0}
+.hint{color:var(--sub);font-size:12px;margin-top:10px;text-align:center}
+#light{position:fixed;inset:0;background:#fff;display:none;z-index:5}
+#dark{position:fixed;inset:0;background:#000;display:none;z-index:6;color:#333;align-items:center;justify-content:center;text-align:center;font-size:13px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<div id="app">
+  <header><div class="logo">Phone<b>Cam</b></div><div id="pill">не подключено</div></header>
+  <div id="stage"><video id="v" playsinline autoplay muted></video><div id="ph">Камера включится после подключения</div></div>
+  <div id="panel">
+    <div id="status"></div>
+    <div id="pair">
+      <div class="row"><input id="code" maxlength="9" placeholder="XXXX-XXXX" autocomplete="off" autocapitalize="characters" spellcheck="false"><button id="go" class="primary">Подключить</button></div>
+      <button id="scan" class="full hidden">Сканировать QR-код с экрана ПК</button>
+      <div class="hint">В программе PhoneCam на ПК выбери «Телеграм» - там будет QR-код и код для ввода.</div>
+    </div>
+    <div id="ctl" class="hidden">
+      <div class="grid">
+        <button id="cam">Камера</button>
+        <button id="torch">Фонарик</button>
+        <button id="dim">Затемнить</button>
+      </div>
+      <div class="row" id="zoomrow"><input type="range" id="zoom" min="1" max="5" step="0.1" value="1"><span id="zv">1.0×</span></div>
+      <button id="stop" class="full">Отключиться</button>
+      <div class="hint">Не сворачивай приложение и не блокируй экран - иначе камера выключится.</div>
+    </div>
+  </div>
+</div>
+<div id="light"></div>
+<div id="dark">Нажми, чтобы вернуть экран</div>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+// Telegram's script is loaded without blocking the page (boot() waits for it a little)
+let tg = null, inTg = /tgWebApp/.test(location.hash + location.search);
+const qs = new URLSearchParams(location.search);
+const BROKERS = qs.get("broker") ? [qs.get("broker")] :
+  ["wss://broker.emqx.io:8084/mqtt", "wss://broker.hivemq.com:8884/mqtt", "wss://test.mosquitto.org:8081/mqtt"];
+const ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const enc = new TextEncoder(), dec = new TextDecoder();
+
+
+// ---------------------------------------------------------------- helpers
+function setStatus(t, err) { $("status").textContent = t || ""; $("status").className = err ? "err" : ""; }
+function setPill(t, cls) { $("pill").textContent = t; $("pill").className = cls || ""; }
+function normCode(s) {
+  s = String(s || "").toUpperCase().replace(/[\s-]/g, "");
+  if (s.length !== 8) return "";
+  for (const c of s) if (!ALPHA.includes(c)) return "";
+  return s;
+}
+function codeFromText(t) {
+  t = String(t || "");
+  let m = t.match(/start(?:app)?=([A-Za-z0-9-]+)/) || t.match(/[?&]code=([A-Za-z0-9-]+)/) || t.match(/#([A-Za-z0-9-]{8,9})\s*$/) || t.match(/^\s*([A-Za-z0-9-]{8,9})\s*$/);
+  return m ? normCode(m[1]) : "";
+}
+function pretty(c) { return c.slice(0, 4) + "-" + c.slice(4); }
+async function sha256(s) { return new Uint8Array(await crypto.subtle.digest("SHA-256", enc.encode(s))); }
+const hex = b => Array.from(b, x => x.toString(16).padStart(2, "0")).join("");
+function rid(n) { const b = crypto.getRandomValues(new Uint8Array(n)); return hex(b); }
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function store(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
+function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+
+// ---------------------------------------------------------------- MQTT over WebSocket (QoS 0)
+function mqttStr(s) { const b = enc.encode(s); return [b.length >> 8, b.length & 255, ...b]; }
+function mqttLen(n) { const o = []; do { let d = n % 128; n = Math.floor(n / 128); if (n) d |= 128; o.push(d); } while (n); return o; }
+class Mqtt {
+  constructor(url, onMsg, onState) { this.url = url; this.onMsg = onMsg; this.onState = onState; this.up = false; this.closed = false; this.buf = new Uint8Array(0); this.open(); }
+  open() {
+    if (this.closed) return;
+    let ws;
+    try { ws = new WebSocket(this.url, ["mqtt"]); } catch (e) { this.retry(); return; }
+    this.ws = ws; ws.binaryType = "arraybuffer";
+    const to = setTimeout(() => { try { ws.close(); } catch (e) {} }, 7000);
+    ws.onopen = () => {
+      const vh = [...mqttStr("MQTT"), 4, 2, 0, 60, ...mqttStr("phcph-" + rid(6))];
+      ws.send(new Uint8Array([0x10, ...mqttLen(vh.length), ...vh]));
+    };
+    ws.onmessage = ev => { clearTimeout(to); this.feed(new Uint8Array(ev.data)); };
+    ws.onclose = ws.onerror = () => {
+      clearTimeout(to); clearInterval(this.ping);
+      if (this.ws !== ws) return;
+      this.ws = null;
+      if (this.up) { this.up = false; this.onState(false); }
+      this.retry();
+    };
+  }
+  retry() { if (!this.closed) setTimeout(() => this.open(), 3000); }
+  close() { this.closed = true; clearInterval(this.ping); try { this.ws && this.ws.close(); } catch (e) {} }
+  send(bytes) { if (this.ws && this.ws.readyState === 1) this.ws.send(bytes); }
+  subscribe(topic) { const vh = [0, 1, ...mqttStr(topic), 0]; this.send(new Uint8Array([0x82, ...mqttLen(vh.length), ...vh])); }
+  publish(topic, payload) {
+    const t = mqttStr(topic);
+    const out = new Uint8Array(1 + 4 + t.length + payload.length);
+    const len = mqttLen(t.length + payload.length);
+    out[0] = 0x30; out.set(len, 1); out.set(t, 1 + len.length); out.set(payload, 1 + len.length + t.length);
+    this.send(out.subarray(0, 1 + len.length + t.length + payload.length));
+  }
+  feed(chunk) {
+    const b = new Uint8Array(this.buf.length + chunk.length); b.set(this.buf); b.set(chunk, this.buf.length);
+    let o = 0;
+    for (;;) {
+      if (b.length - o < 2) break;
+      let len = 0, mul = 1, i = o + 1, ok = false;
+      for (let k = 0; k < 4 && i < b.length; k++, i++) { len += (b[i] & 127) * mul; mul *= 128; if (!(b[i] & 128)) { ok = true; i++; break; } }
+      if (!ok || i + len > b.length) break;
+      this.packet(b[o], b.subarray(i, i + len));
+      o = i + len;
+    }
+    this.buf = b.slice(o);
+  }
+  packet(h, body) {
+    const t = h & 0xF0;
+    if (t === 0x20) { if (body[1] === 0) { this.subscribe(this.topic); } else this.ws.close(); }
+    else if (t === 0x90) {
+      this.up = true; this.onState(true);
+      clearInterval(this.ping); this.ping = setInterval(() => this.send(new Uint8Array([0xC0, 0])), 25000);
+    } else if (t === 0x30) {
+      const tl = body[0] << 8 | body[1];
+      let off = 2 + tl; if ((h >> 1) & 3) off += 2;
+      this.onMsg(body.slice(off));
+    }
+  }
+}
+
+// ---------------------------------------------------------------- state
+const S = {
+  code: "", key: null, topic: "", brokers: [], pc: null, dc: null, sid: "", stream: null, track: null, sender: null,
+  cfg: { w: 1280, h: 720, fps: 30, kbps: 6000, cam: "back" }, connected: false, answered: false,
+  torch: false, zoom: 1, light: false, wake: null, running: false, devices: [], offerTimer: 0, statTimer: 0,
+  lastBytes: 0, lastT: 0, caps: {}
+};
+
+async function seal(text) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, tagLength: 128 }, S.key, enc.encode(text)));
+  const out = new Uint8Array(12 + ct.length); out.set(iv); out.set(ct, 12); return out;
+}
+async function open(bytes) {
+  if (bytes.length < 28) return null;
+  try {
+    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.subarray(0, 12), tagLength: 128 }, S.key, bytes.subarray(12));
+    return dec.decode(pt);
+  } catch (e) { return null; }
+}
+async function publish(text) {
+  const p = await seal(text);
+  for (const b of S.brokers) if (b.up) b.publish(S.topic + "/pc", p);
+}
+function brokersUp() { return S.brokers.filter(b => b.up).length; }
+
+// ---------------------------------------------------------------- camera
+async function listCameras() {
+  try { S.devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === "videoinput"); } catch (e) { S.devices = []; }
+}
+function wideDevice() {
+  return S.devices.find(d => /ultra|wide|широк|0\.5/i.test(d.label) && !/front|фронт|user|tele/i.test(d.label));
+}
+function constraintsFor(cfg) {
+  const v = { width: { ideal: cfg.w }, height: { ideal: cfg.h }, frameRate: { ideal: cfg.fps } };
+  if (cfg.cam === "front") v.facingMode = "user";
+  else if (cfg.cam === "wide" && wideDevice()) v.deviceId = { exact: wideDevice().deviceId };
+  else v.facingMode = { ideal: "environment" };
+  return { video: v, audio: false };
+}
+async function startCamera() {
+  if (S.track) { S.track.stop(); S.track = null; }
+  if (S.stream) S.stream.getTracks().forEach(t => t.stop());
+  let st;
+  try { st = await navigator.mediaDevices.getUserMedia(constraintsFor(S.cfg)); }
+  catch (e) {
+    if (S.cfg.cam === "wide") { S.cfg.cam = "back"; st = await navigator.mediaDevices.getUserMedia(constraintsFor(S.cfg)); }
+    else throw e;
+  }
+  S.stream = st; S.track = st.getVideoTracks()[0];
+  try { S.track.contentHint = "motion"; } catch (e) {}
+  $("v").srcObject = st; $("ph").classList.add("hidden");
+  $("v").style.transform = S.cfg.cam === "front" ? "scaleX(-1)" : "";
+  await listCameras();
+  S.torch = false; S.zoom = 1;
+  readCaps();
+  if (S.sender) await S.sender.replaceTrack(S.track);
+  applySenderParams();
+}
+function readCaps() {
+  let c = {};
+  try { c = S.track.getCapabilities ? S.track.getCapabilities() : {}; } catch (e) {}
+  S.caps = c;
+  const z = c.zoom;
+  $("zoomrow").classList.toggle("hidden", !z);
+  if (z) { $("zoom").min = z.min || 1; $("zoom").max = Math.min(z.max || 1, 10); $("zoom").step = z.step || 0.1; $("zoom").value = 1; $("zv").textContent = "1.0×"; }
+  const hasTorch = !!c.torch || S.cfg.cam === "front";
+  $("torch").disabled = !hasTorch;
+  $("torch").textContent = S.cfg.cam === "front" ? "Подсветка" : "Фонарик";
+  $("torch").classList.remove("on");
+  $("cam").textContent = { back: "Основная", front: "Фронтальная", wide: "Широкая" }[S.cfg.cam] || "Камера";
+  const s = S.track.getSettings ? S.track.getSettings() : {};
+  ctl(`CAPS torch=${hasTorch ? 1 : 0} zoom=${z ? (z.min || 1) + "-" + (z.max || 1) : 0} ev=${c.exposureCompensation ? 1 : 0} wide=${wideDevice() ? 1 : 0} res=${s.width || 0}x${s.height || 0}@${Math.round(s.frameRate || 0)}`);
+}
+async function setTorch(on) {
+  if (S.cfg.cam === "front") { S.light = on; $("light").style.display = on ? "block" : "none"; S.torch = on; }
+  else if (S.caps.torch) {
+    try { await S.track.applyConstraints({ advanced: [{ torch: on }] }); S.torch = on; } catch (e) { S.torch = false; }
+  }
+  $("torch").classList.toggle("on", S.torch);
+  ctl("INFO torch " + (S.torch ? 1 : 0));
+}
+async function setZoom(z) {
+  if (!S.caps.zoom) return;
+  z = Math.max(S.caps.zoom.min || 1, Math.min(S.caps.zoom.max || 1, z));
+  try { await S.track.applyConstraints({ advanced: [{ zoom: z }] }); S.zoom = z; } catch (e) {}
+  $("zoom").value = S.zoom; $("zv").textContent = S.zoom.toFixed(1) + "×";
+}
+async function setEv(ev) {
+  const c = S.caps.exposureCompensation;
+  if (!c) { ctl("INFO evhw 0"); return; }
+  try { await S.track.applyConstraints({ advanced: [{ exposureCompensation: Math.max(c.min, Math.min(c.max, ev)) }] }); ctl("INFO evhw 1"); }
+  catch (e) { ctl("INFO evhw 0"); }
+}
+async function focusOnce() {
+  try { await S.track.applyConstraints({ advanced: [{ focusMode: "single-shot" }] }); } catch (e) {}
+  setTimeout(() => { try { S.track.applyConstraints({ advanced: [{ focusMode: "continuous" }] }); } catch (e) {} }, 2500);
+}
+function applySenderParams() {
+  if (!S.sender) return;
+  try {
+    const p = S.sender.getParameters();
+    if (!p.encodings || !p.encodings.length) p.encodings = [{}];
+    p.encodings[0].maxBitrate = S.cfg.kbps * 1000;
+    p.encodings[0].maxFramerate = S.cfg.fps;
+    p.encodings[0].scaleResolutionDownBy = 1;
+    p.degradationPreference = "maintain-framerate";
+    S.sender.setParameters(p).catch(() => {});
+  } catch (e) {}
+}
+
+// ---------------------------------------------------------------- control channel
+function ctl(line) { if (S.dc && S.dc.readyState === "open") try { S.dc.send(line + "\n"); } catch (e) {} }
+async function onCtl(line) {
+  const a = line.trim().split(/\s+/);
+  switch (a[0]) {
+    case "TORCH": await setTorch(a[1] === "1"); break;
+    case "ZOOM": await setZoom(parseFloat(a[1]) || 1); ctl("INFO zoom " + S.zoom.toFixed(1)); break;
+    case "EV": await setEv(parseFloat(a[1]) || 0); break;
+    case "AF": await focusOnce(); break;
+    case "PING": ctl("PONG " + a[1] + " " + Math.round(performance.now() * 1000)); break;
+    case "CFG": {
+      const n = { w: +a[1] || 1280, h: +a[2] || 720, fps: +a[3] || 30, kbps: +a[4] || 6000, cam: a[5] || "back" };
+      const restart = n.w !== S.cfg.w || n.h !== S.cfg.h || n.fps !== S.cfg.fps || n.cam !== S.cfg.cam;
+      S.cfg = n;
+      if (restart) { try { await startCamera(); } catch (e) { setStatus("Камера: " + e.message, true); } }
+      else applySenderParams();
+      break;
+    }
+  }
+}
+
+// ---------------------------------------------------------------- WebRTC
+function pickH264(tr) {
+  if (!RTCRtpSender.getCapabilities || !tr.setCodecPreferences) return;
+  const all = RTCRtpSender.getCapabilities("video").codecs;
+  const h = all.filter(c => /h264/i.test(c.mimeType) && /packetization-mode=1/.test(c.sdpFmtpLine || ""));
+  const rank = c => { const m = (c.sdpFmtpLine || "").match(/profile-level-id=([0-9a-f]{2})([0-9a-f]{2})/i); if (!m) return 9;
+    return { "64": 0, "4d": 1 }[m[1].toLowerCase()] ?? (m[2].toLowerCase() === "e0" ? 2 : 3); };
+  h.sort((x, y) => rank(x) - rank(y));
+  if (h.length) { try { tr.setCodecPreferences([h[0]]); } catch (e) { try { tr.setCodecPreferences(h); } catch (e2) {} } }
+}
+function closePeer() {
+  clearInterval(S.offerTimer); clearInterval(S.statTimer);
+  if (S.pc) { try { S.pc.close(); } catch (e) {} }
+  S.pc = null; S.dc = null; S.sender = null; S.connected = false; S.answered = false;
+}
+async function negotiate() {
+  closePeer();
+  if (!S.running) return;
+  const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun.cloudflare.com:3478" }] });
+  S.pc = pc; S.sid = rid(6);
+  const dc = pc.createDataChannel("ctl"); S.dc = dc;
+  dc.onopen = () => { readCaps(); sendBattery(true); ctl("INFO torch " + (S.torch ? 1 : 0)); };
+  dc.onmessage = ev => String(ev.data).split("\n").forEach(l => l && onCtl(l));
+  const tr = pc.addTransceiver(S.track, { direction: "sendonly", streams: [S.stream] });
+  S.sender = tr.sender;
+  pickH264(tr);
+  pc.onconnectionstatechange = () => {
+    if (pc !== S.pc) return;
+    const st = pc.connectionState;
+    if (st === "connected") {
+      S.connected = true; setPill("в эфире", "ok"); setStatus("Камера передаётся на ПК");
+      showCtl(true); applySenderParams(); startStats();
+      if (inTg) try { tg.HapticFeedback.notificationOccurred("success"); } catch (e) {}
+    } else if (st === "failed" || st === "disconnected" || st === "closed") {
+      if (!S.running) return;
+      setPill("переподключение", "err"); setStatus("Связь с ПК потеряна, переподключаюсь…", true);
+      setTimeout(() => { if (S.pc === pc && S.running) negotiate(); }, st === "disconnected" ? 3000 : 800);
+    }
+  };
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await new Promise(r => {
+    if (pc.iceGatheringState === "complete") return r();
+    const t = setTimeout(r, 2500);
+    pc.addEventListener("icegatheringstatechange", () => { if (pc.iceGatheringState === "complete") { clearTimeout(t); r(); } });
+  });
+  if (S.pc !== pc) return;
+  const msg = "OFFER " + S.sid + "\n" + pc.localDescription.sdp;
+  const send = () => {
+    if (S.pc !== pc || S.answered) return;
+    if (!brokersUp()) { setStatus("Нет связи с сервером. Проверь интернет на телефоне.", true); return; }
+    setStatus("Ищу ПК с кодом " + pretty(S.code) + "… Открой PhoneCam на ПК и выбери «Телеграм».");
+    publish(msg);
+  };
+  send();
+  S.offerTimer = setInterval(send, 2000);
+}
+async function onSignal(bytes) {
+  const text = await open(bytes);
+  if (!text) return;
+  const nl = text.indexOf("\n");
+  const head = text.slice(0, nl < 0 ? text.length : nl).split(" ");
+  if (head[0] === "STOP") {
+    if (S.running && S.answered) {
+      setPill("ждём ПК"); setStatus("Программа на ПК остановлена. Жду, когда её снова запустят…");
+      setTimeout(() => { if (S.running) negotiate(); }, 500);
+    }
+    return;
+  }
+  if (head[0] !== "ANSWER" || head[1] !== S.sid || S.answered || !S.pc) return;
+  S.answered = true; clearInterval(S.offerTimer);
+  const n = { w: +head[2] || 1280, h: +head[3] || 720, fps: +head[4] || 30, kbps: +head[5] || 6000, cam: head[6] || "back" };
+  setStatus("ПК найден, соединяюсь…");
+  try { await S.pc.setRemoteDescription({ type: "answer", sdp: text.slice(nl + 1) }); }
+  catch (e) { setStatus("Ошибка соединения: " + e.message, true); S.answered = false; return; }
+  const restart = n.w !== S.cfg.w || n.h !== S.cfg.h || n.fps !== S.cfg.fps || n.cam !== S.cfg.cam;
+  S.cfg = n;
+  if (restart) { try { await startCamera(); } catch (e) { setStatus("Камера: " + e.message, true); } } else applySenderParams();
+}
+
+// ---------------------------------------------------------------- stats, battery, wake lock
+function startStats() {
+  clearInterval(S.statTimer); S.lastBytes = 0; S.lastT = 0;
+  S.statTimer = setInterval(async () => {
+    if (!S.pc || !S.connected) return;
+    let out = null;
+    try { (await S.pc.getStats()).forEach(r => { if (r.type === "outbound-rtp" && r.kind === "video") out = r; }); } catch (e) {}
+    if (!out) return;
+    const now = performance.now(), mbit = S.lastT ? (out.bytesSent - S.lastBytes) * 8 / ((now - S.lastT) * 1000) : 0;
+    S.lastBytes = out.bytesSent; S.lastT = now;
+    const why = { bandwidth: "сеть", cpu: "процессор телефона", other: "другое" }[out.qualityLimitationReason];
+    ctl(`STATS ${out.frameWidth || 0}x${out.frameHeight || 0} ${Math.round(out.framesPerSecond || 0)} к/с, ${mbit.toFixed(1)} Мбит/с` +
+      (out.targetBitrate ? ", цель " + (out.targetBitrate / 1e6).toFixed(1) : "") + (out.encoderImplementation ? ", кодер " + out.encoderImplementation : "") + (why ? ", ограничивает: " + why : "") + (qs.get("debug") ? ` nack=${out.nackCount} rtx=${out.retransmittedPacketsSent} pli=${out.pliCount}` : ""));
+    sendBattery(false);
+  }, 2000);
+}
+let battery = null, lastBat = "";
+async function sendBattery(force) {
+  try {
+    if (!battery && navigator.getBattery) battery = await navigator.getBattery();
+    if (!battery) return;
+    const s = "INFO battery " + Math.round(battery.level * 100) + " " + (battery.charging ? 1 : 0);
+    if (force || s !== lastBat) { lastBat = s; ctl(s); }
+  } catch (e) {}
+}
+async function keepAwake() {
+  try { if (navigator.wakeLock && document.visibilityState === "visible" && S.running) S.wake = await navigator.wakeLock.request("screen"); } catch (e) {}
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && S.running) {
+    keepAwake();
+    if (S.track && S.track.readyState === "ended") startCamera().then(() => negotiate()).catch(() => {});
+  }
+});
+
+// ---------------------------------------------------------------- UI
+function showCtl(on) { $("pair").classList.toggle("hidden", on); $("ctl").classList.toggle("hidden", !on); }
+async function connect(code) {
+  code = normCode(code);
+  if (!code) { setStatus("Код - 8 символов, как на экране ПК (например ABCD-2345)", true); return; }
+  stop(false);
+  S.code = code; S.running = true; store("phonecam.code", code);
+  $("code").value = pretty(code);
+  showCtl(true);
+  setPill("подключение");
+  setStatus("Включаю камеру…");
+  try { await startCamera(); }
+  catch (e) {
+    S.running = false; showCtl(false); setPill("не подключено", "err");
+    setStatus(e && e.name === "NotAllowedError" ? "Нет доступа к камере. Разреши камеру для Телеграма/браузера в настройках телефона." : "Камера не включилась: " + (e.message || e), true);
+    return;
+  }
+  keepAwake();
+  S.key = await crypto.subtle.importKey("raw", await sha256("phonecam-key:" + code), "AES-GCM", false, ["encrypt", "decrypt"]);
+  S.topic = "phonecam/v1/" + hex(await sha256("phonecam-topic:" + code)).slice(0, 20);
+  let started = false;
+  S.brokers = BROKERS.map(u => {
+    const m = new Mqtt(u, b => onSignal(b), up => {
+      if (up && !started) { started = true; negotiate(); }
+      else if (up && S.pc && !S.answered) { /* the offer timer resends on all brokers */ }
+    });
+    m.topic = S.topic + "/ph";
+    return m;
+  });
+  setStatus("Подключаюсь к серверу…");
+  setTimeout(() => { if (S.running && !started) setStatus("Сервер не отвечает. Проверь интернет на телефоне.", true); }, 9000);
+}
+function stop(ui = true) {
+  if (S.pc && S.sid) publish("BYE " + S.sid).catch(() => {});
+  S.running = false;
+  closePeer();
+  S.brokers.forEach(b => b.close()); S.brokers = [];
+  if (S.stream) S.stream.getTracks().forEach(t => t.stop());
+  S.stream = null; S.track = null;
+  $("light").style.display = "none";
+  try { S.wake && S.wake.release(); } catch (e) {}
+  if (ui) { showCtl(false); setPill("не подключено"); setStatus(""); $("ph").classList.remove("hidden"); $("v").srcObject = null; }
+}
+
+$("go").onclick = () => connect($("code").value);
+$("code").addEventListener("keydown", e => { if (e.key === "Enter") connect($("code").value); });
+$("code").addEventListener("input", e => {
+  let s = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+  e.target.value = s.length > 4 ? s.slice(0, 4) + "-" + s.slice(4) : s;
+});
+$("scan").onclick = () => {
+  tg.showScanQrPopup({ text: "Наведи на QR-код в программе PhoneCam на ПК" }, t => {
+    const c = codeFromText(t);
+    if (c) { setTimeout(() => connect(c), 50); return true; }
+    return false;
+  });
+};
+$("stop").onclick = () => { stop(); store("phonecam.code", null); };
+$("torch").onclick = () => setTorch(!S.torch);
+$("zoom").oninput = e => { setZoom(parseFloat(e.target.value)); ctl("INFO zoom " + parseFloat(e.target.value).toFixed(1)); };
+$("cam").onclick = async () => {
+  const order = ["back", "front"].concat(wideDevice() ? ["wide"] : []);
+  S.cfg.cam = order[(order.indexOf(S.cfg.cam) + 1) % order.length];
+  if (S.light) setTorch(false);
+  try { await startCamera(); ctl("INFO camera " + S.cfg.cam); } catch (e) { setStatus("Камера: " + e.message, true); }
+};
+$("dim").onclick = () => { $("dark").style.display = "flex"; };
+$("dark").onclick = () => { $("dark").style.display = "none"; };
+window.addEventListener("pagehide", () => stop(false));
+
+// auto start: Telegram start parameter, link #CODE, or the last code used
+function boot() {
+  const T = window.Telegram && Telegram.WebApp;
+  if (T && T.platform && T.platform !== "unknown") { tg = T; inTg = true; }
+  else inTg = false;
+  if (inTg) {
+    tg.ready(); tg.expand();
+    try { tg.disableVerticalSwipes(); } catch (e) {}
+    try { tg.setHeaderColor("#0f1115"); tg.setBackgroundColor("#0f1115"); } catch (e) {}
+    $("scan").classList.remove("hidden");
+  }
+  const startCode = (inTg && tg.initDataUnsafe && normCode(tg.initDataUnsafe.start_param)) || normCode(qs.get("code")) ||
+    codeFromText(location.hash) || load("phonecam.code");
+  if (startCode) connect(startCode);
+  else setStatus(inTg ? "Нажми «Сканировать QR-код» или введи код с экрана ПК." : "Введи код с экрана ПК.");
+}
+if (inTg) {
+  let booted = false;
+  const go = () => { if (!booted) { booted = true; boot(); } };
+  const sc = document.createElement("script");
+  sc.src = "https://telegram.org/js/telegram-web-app.js";
+  sc.onload = go; sc.onerror = go;
+  document.head.appendChild(sc);
+  setTimeout(go, 4000);
+} else boot();
+</script>
+</body>
+</html>

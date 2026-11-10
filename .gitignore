@@ -1,0 +1,5 @@
+android/build/
+pc/build/
+android/tools/android.jar
+android/tools/dx-*.jar
+*.keystore
