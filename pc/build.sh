@@ -9,7 +9,7 @@ SC=../third_party/softcam/src
 LIBS="-lws2_32 -liphlpapi -lmfplat -lole32"
 # WebRTC receiver for the Telegram/browser mode: libdatachannel + mbedTLS, prebuilt static libs in third_party/webrtc
 WR=../third_party/webrtc
-WEB_SRC="core/web_link.cpp core/qr.cpp"
+WEB_SRC="core/web_link.cpp core/qr.cpp core/i18n.cpp"
 WEB_INC="-I$WR/include -DRTC_STATIC"
 WEB_LIBS="$WR/lib/libdatachannel-static.a $WR/lib/libjuice-static.a $WR/lib/libsrtp2.a $WR/lib/libusrsctp.a $WR/lib/libmbedtls.a $WR/lib/libmbedx509.a $WR/lib/libmbedcrypto.a $WR/lib/libeverest.a $WR/lib/libp256m.a -lbcrypt -lcrypt32 -lmswsock"
 
@@ -36,7 +36,7 @@ if [ ! -f third_party/libobs.a ]; then
 fi
 $Z c++ -target x86_64-windows-gnu -std=c++17 -O2 -shared -s -Ithird_party/libobs-headers -o "$OUT/phonecam-obs.dll" \
     $WEB_INC obs-plugin/phonecam-obs.cpp core/phonecam_client.cpp core/h264_decoder.cpp core/night_filter.cpp $WEB_SRC obs-plugin/phonecam-obs.def \
-    third_party/libobs.a $WEB_LIBS $LIBS
+    third_party/libobs.a $WEB_LIBS $LIBS -lshell32
 
 echo "[4/4] done"
 ls -la "$OUT"/*.exe "$OUT"/*.dll

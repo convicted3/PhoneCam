@@ -11,6 +11,7 @@
 
 #include "../core/phonecam_client.h"
 #include "../core/web_link.h"
+#include "../core/i18n.h"
 
 OBS_DECLARE_MODULE()
 OBS_MODULE_AUTHOR("PhoneCam")
@@ -23,7 +24,7 @@ namespace {
 
 struct ResOpt { int w, h; const char* name; };
 const ResOpt kRes[] = {{640, 480, "640 x 480"}, {1280, 720, "1280 x 720 (HD)"}, {1920, 1080, "1920 x 1080 (Full HD)"},
-                       {3840, 2160, "3840 x 2160 (4K, если телефон умеет)"}};
+                       {3840, 2160, TR("3840 x 2160 (4K, если телефон умеет)")}};
 
 // Camera capabilities reported by the phone; shared so the background query can outlive the source.
 struct CapsState {
@@ -56,7 +57,7 @@ struct PhoneSource {
     std::mutex mu;
     phonecam::Config cfg;
     bool have_cfg = false;
-    std::string status = "Не подключено";
+    std::string status = TR("Не подключено");
     std::atomic<bool> streaming{false};
     bool torch = false;
     double zoom = 1.0;
@@ -65,8 +66,8 @@ struct PhoneSource {
     void Restart() {
         client.Stop();
         obs_source_output_video(source, nullptr);
-        if (!enabled) { status = "Выключено"; return; }
-        if (!cfg.web && !cfg.usb && cfg.host.empty()) { status = "Введи IP телефона"; return; }
+        if (!enabled) { status = TR("Выключено"); return; }
+        if (!cfg.web && !cfg.usb && cfg.host.empty()) { status = TR("Введи IP телефона"); return; }
         if (!cfg.web) QueryCapsAsync(caps, cfg);
         client.Start(cfg,
             [this](const phonecam::Frame& f) { Output(f); },
@@ -109,7 +110,7 @@ struct PhoneSource {
     }
 };
 
-const char* GetName(void*) { return "PhoneCam (камера телефона)"; }
+const char* GetName(void*) { return TR("PhoneCam (камера телефона)"); }
 
 void Defaults(obs_data_t* s) {
     obs_data_set_default_bool(s, "enabled", true);
@@ -225,7 +226,7 @@ void FillFps(PhoneSource* p, obs_properties_t* props, obs_data_t* s) {
     for (int f : {15, 24, 30, 60}) {
         if (f > normal_max && !(f == 60 && hs_on)) continue;
         std::string name = std::to_string(f);
-        if (f == 60 && normal_max < 60) name += " (скоростная съёмка)";
+        if (f == 60 && normal_max < 60) name += TR(" (скоростная съёмка)");
         obs_property_list_add_int(fps, name.c_str(), f);
         count++;
     }
@@ -242,7 +243,7 @@ bool FindClicked(obs_properties_t* props, obs_property_t*, void* data) {
     auto found = phonecam::Discover(1500);
     obs_property_t* info = obs_properties_get(props, "status");
     if (found.empty()) {
-        obs_property_set_description(info, "Телефон не найден. Открой PhoneCam на телефоне, проверь Wi-Fi.");
+        obs_property_set_description(info, TR("Телефон не найден. Открой PhoneCam на телефоне, проверь Wi-Fi."));
         return true;
     }
     obs_data_t* s = obs_source_get_settings(p->source);
@@ -259,7 +260,7 @@ bool FindClicked(obs_properties_t* props, obs_property_t*, void* data) {
     }
     FillFps(p, props, s);
     obs_data_release(s);
-    std::string msg = "Найден: " + found[0].name + " (" + found[0].ip + ")";
+    std::string msg = TR("Найден: ") + found[0].name + " (" + found[0].ip + ")";
     obs_property_set_description(info, msg.c_str());
     return true;
 }
@@ -267,7 +268,7 @@ bool FindClicked(obs_properties_t* props, obs_property_t*, void* data) {
 bool ReconnectClicked(obs_properties_t* props, obs_property_t*, void* data) {
     auto* p = (PhoneSource*)data;
     p->Restart();
-    obs_property_set_description(obs_properties_get(props, "status"), "Переподключение…");
+    obs_property_set_description(obs_properties_get(props, "status"), TR("Переподключение…"));
     return true;
 }
 
@@ -276,7 +277,7 @@ bool RefreshStatus(obs_properties_t* props, obs_property_t*, void* data) {
     std::string st;
     {
         std::lock_guard<std::mutex> lk(p->mu);
-        st = "Статус: " + p->status;
+        st = TR("Статус: ") + p->status;
     }
     obs_property_set_description(obs_properties_get(props, "status"), st.c_str());
     return true;
@@ -303,16 +304,16 @@ obs_properties_t* Properties(void* data) {
     auto* p = (PhoneSource*)data;
     obs_properties_t* props = obs_properties_create();
 
-    std::string st = "Статус: ";
+    std::string st = TR("Статус: ");
     if (p) {
         std::lock_guard<std::mutex> lk(p->mu);
         st += p->status;
     }
     obs_properties_add_text(props, "status", st.c_str(), OBS_TEXT_INFO);
-    obs_properties_add_button(props, "refresh", "Обновить статус", RefreshStatus);
+    obs_properties_add_button(props, "refresh", TR("Обновить статус"), RefreshStatus);
 
-    obs_properties_add_bool(props, "enabled", "Включено");
-    obs_property_t* tg = obs_properties_add_bool(props, "tg", "Через Телеграм / браузер (iPhone и любой телефон)");
+    obs_properties_add_bool(props, "enabled", TR("Включено"));
+    obs_property_t* tg = obs_properties_add_bool(props, "tg", TR("Через Телеграм / браузер (iPhone и любой телефон)"));
     obs_property_set_modified_callback(tg, UsbChanged);
     {
         std::string code = "";
@@ -320,27 +321,27 @@ obs_properties_t* Properties(void* data) {
             std::lock_guard<std::mutex> lk(p->mu);
             code = p->cfg.web_code;
         }
-        std::string info = "Код для Телеграма: " + (code.size() == 8 ? code.substr(0, 4) + "-" + code.substr(4) : code) +
-                           "  (пока телефон не подключён, источник показывает QR-код - наведи на него камеру телефона - откроется бот @phonecamweb_bot)";
+        std::string info = TR("Код для Телеграма: ") + (code.size() == 8 ? code.substr(0, 4) + "-" + code.substr(4) : code) +
+                           TR("  (пока телефон не подключён, источник показывает QR-код - наведи на него камеру телефона - откроется бот @phonecamweb_bot)");
         obs_properties_add_text(props, "tginfo", info.c_str(), OBS_TEXT_INFO);
     }
-    obs_property_t* usb = obs_properties_add_bool(props, "usb", "Подключение по USB (adb)");
+    obs_property_t* usb = obs_properties_add_bool(props, "usb", TR("Подключение по USB (adb)"));
     obs_property_set_modified_callback(usb, UsbChanged);
-    obs_properties_add_text(props, "ip", "IP телефона", OBS_TEXT_DEFAULT);
-    obs_properties_add_button(props, "find", "Найти телефон в сети", FindClicked);
+    obs_properties_add_text(props, "ip", TR("IP телефона"), OBS_TEXT_DEFAULT);
+    obs_properties_add_button(props, "find", TR("Найти телефон в сети"), FindClicked);
 
-    obs_property_t* cam = obs_properties_add_list(props, "camera", "Камера", OBS_COMBO_TYPE_LIST,
+    obs_property_t* cam = obs_properties_add_list(props, "camera", TR("Камера"), OBS_COMBO_TYPE_LIST,
                                                   OBS_COMBO_FORMAT_STRING);
-    obs_property_list_add_string(cam, "Основная (задняя)", "back");
-    obs_property_list_add_string(cam, "Широкоугольная (если есть)", "wide");
-    obs_property_list_add_string(cam, "Фронтальная", "front");
+    obs_property_list_add_string(cam, TR("Основная (задняя)"), "back");
+    obs_property_list_add_string(cam, TR("Широкоугольная (если есть)"), "wide");
+    obs_property_list_add_string(cam, TR("Фронтальная"), "front");
 
-    obs_property_t* res = obs_properties_add_list(props, "res", "Разрешение", OBS_COMBO_TYPE_LIST,
+    obs_property_t* res = obs_properties_add_list(props, "res", TR("Разрешение"), OBS_COMBO_TYPE_LIST,
                                                   OBS_COMBO_FORMAT_INT);
     for (int i = 0; i < (int)(sizeof kRes / sizeof kRes[0]); i++) obs_property_list_add_int(res, kRes[i].name, i);
 
-    obs_property_t* hsp = obs_properties_add_bool(props, "hs", "60 FPS через скоростную съёмку");
-    obs_properties_add_list(props, "fps", "Кадров в секунду", OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
+    obs_property_t* hsp = obs_properties_add_bool(props, "hs", TR("60 FPS через скоростную съёмку"));
+    obs_properties_add_list(props, "fps", TR("Кадров в секунду"), OBS_COMBO_TYPE_LIST, OBS_COMBO_FORMAT_INT);
     obs_property_set_modified_callback2(cam, FpsDepsChanged, p);
     obs_property_set_modified_callback2(res, FpsDepsChanged, p);
     obs_property_set_modified_callback2(hsp, FpsDepsChanged, p);
@@ -354,26 +355,27 @@ obs_properties_t* Properties(void* data) {
         obs_data_release(d);
     }
 
-    obs_property_t* q = obs_properties_add_list(props, "kbps", "Качество (битрейт)", OBS_COMBO_TYPE_LIST,
+    obs_property_t* q = obs_properties_add_list(props, "kbps", TR("Качество (битрейт)"), OBS_COMBO_TYPE_LIST,
                                                 OBS_COMBO_FORMAT_INT);
-    obs_property_list_add_int(q, "Низкое - 2 Мбит/с", 2000);
-    obs_property_list_add_int(q, "Среднее - 4 Мбит/с", 4000);
-    obs_property_list_add_int(q, "Высокое - 8 Мбит/с", 8000);
-    obs_property_list_add_int(q, "Очень высокое - 16 Мбит/с", 16000);
-    obs_property_list_add_int(q, "Максимум - 30 Мбит/с", 30000);
+    obs_property_list_add_int(q, TR("Низкое - 2 Мбит/с"), 2000);
+    obs_property_list_add_int(q, TR("Среднее - 4 Мбит/с"), 4000);
+    obs_property_list_add_int(q, TR("Высокое - 8 Мбит/с"), 8000);
+    obs_property_list_add_int(q, TR("Очень высокое - 16 Мбит/с"), 16000);
+    obs_property_list_add_int(q, TR("Максимум - 30 Мбит/с"), 30000);
 
-    obs_properties_add_button(props, "orient", "Переключить: горизонтально / вертикально", OrientClicked);
-    obs_properties_add_bool(props, "mirror", "Отразить зеркально");
-    obs_properties_add_bool(props, "rot180", "Повернуть на 180°");
-    obs_properties_add_bool(props, "torch", "Фонарик (у фронтальной - подсветка экраном)");
-    obs_properties_add_float_slider(props, "zoom", "Зум", 1.0, 8.0, 0.1);
-    obs_properties_add_button(props, "reconnect", "Переподключить", ReconnectClicked);
+    obs_properties_add_button(props, "orient", TR("Переключить: горизонтально / вертикально"), OrientClicked);
+    obs_properties_add_bool(props, "mirror", TR("Отразить зеркально"));
+    obs_properties_add_bool(props, "rot180", TR("Повернуть на 180°"));
+    obs_properties_add_bool(props, "torch", TR("Фонарик (у фронтальной - подсветка экраном)"));
+    obs_properties_add_float_slider(props, "zoom", TR("Зум"), 1.0, 8.0, 0.1);
+    obs_properties_add_button(props, "reconnect", TR("Переподключить"), ReconnectClicked);
     return props;
 }
 
 }  // namespace
 
 bool obs_module_load(void) {
+    phonecam::SetLang(phonecam::LangFromCode(obs_get_locale()));  // follow OBS's UI language
     obs_source_info info{};
     info.id = "phonecam_source";
     info.type = OBS_SOURCE_TYPE_INPUT;

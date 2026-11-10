@@ -2,6 +2,8 @@
 
 <h1 align="center">PhoneCam</h1>
 
+<p align="center"><b>Русский</b> · <a href="README.en.md">English</a> · <a href="README.uk.md">Українська</a></p>
+
 <p align="center">Телефон как вебкамера для Windows и OBS. Бесплатно, без рекламы, без водяных знаков.<br>
 <i>Free phone-as-webcam for Windows and OBS (Android app, iPhone via Telegram / browser).</i></p>
 
@@ -33,6 +35,7 @@
 - Низкая задержка: аппаратное H.264 на телефоне, декодер Media Foundation на ПК, сброс очереди при отставании.
 - Заряд батареи телефона в окне программы и в меню трея, уведомление при 15% и 5%.
 - Тёмная и светлая тема, работа из трея.
+- Интерфейс на русском, английском и украинском (ПК - в настройках ⚙, телефон и бот - по языку телефона, OBS - по языку OBS).
 
 ## Установка
 
@@ -108,6 +111,9 @@ bash android/build.sh   # -> android/build/PhoneCam.apk (android.jar и dx ск�
 python3 web/build_worker.py   # -> web/worker.js, вставить в Cloudflare Worker
 ```
 Для бота добавь в Worker секрет `BOT_TOKEN` (токен от @BotFather) и открой `https://<worker>/setup`.
+
+**Переводы:** строки лежат в `i18n/pc_strings.py`, `i18n/android_strings.py`, `i18n/web_strings.py`
+(русский текст -> английский, украинский). После правки: `python3 i18n/gen.py`.
 
 ## Лицензия
 

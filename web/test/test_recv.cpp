@@ -5,6 +5,7 @@
 #include <thread>
 #include <chrono>
 namespace phonecam { void Log(const std::string& l) { printf("[log] %s\n", l.c_str()); fflush(stdout); } }
+const char* TR(const char* s) { return s; }
 using namespace phonecam;
 int main(int argc, char** argv) {
     int secs = argc > 1 ? atoi(argv[1]) : 20;

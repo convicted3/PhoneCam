@@ -24,6 +24,7 @@
 #include "../core/phonecam_client.h"
 #include "../core/qr.h"
 #include "../core/web_link.h"
+#include "../core/i18n.h"
 
 using namespace phonecam;
 
@@ -36,7 +37,7 @@ enum : int {
     // settings window
     IDS_EV = 130, IDS_EV_VAL, IDS_WB, IDS_EDGE, IDS_NR, IDS_AELOCK, IDS_AWBLOCK,
     IDS_BRI, IDS_BRI_VAL, IDS_CON, IDS_CON_VAL, IDS_SAT, IDS_SAT_VAL, IDS_GAM, IDS_GAM_VAL, IDS_SHP, IDS_SHP_VAL,
-    IDS_RESET, IDS_DONE, IDS_TMP, IDS_TMP_VAL, IDS_AUTOBRI, IDS_VCAM_STATE, IDS_VCAM_BTN, IDS_VCAM_PROG,
+    IDS_RESET, IDS_DONE, IDS_TMP, IDS_TMP_VAL, IDS_AUTOBRI, IDS_VCAM_STATE, IDS_VCAM_BTN, IDS_VCAM_PROG, IDS_LANG,
 };
 constexpr UINT WM_APP_FRAME = WM_APP + 1;
 constexpr UINT WM_APP_STATUS = WM_APP + 2;
@@ -55,8 +56,8 @@ struct Res { int w, h; const wchar_t* name; };
 const Res kRes[] = {{640, 480, L"640 × 480"}, {1280, 720, L"1280 × 720 (HD)"}, {1920, 1080, L"1920 × 1080 (Full HD)"}};
 const int kFps[] = {15, 24, 30, 60};
 struct Quality { int kbps; const wchar_t* name; };
-const Quality kQuality[] = {{2000, L"Низкое (2 Мбит/с)"}, {4000, L"Среднее (4 Мбит/с)"},
-                            {8000, L"Высокое (8 Мбит/с)"}, {16000, L"Максимум (16 Мбит/с)"}};
+const Quality kQuality[] = {{2000, TRW(L"Низкое (2 Мбит/с)")}, {4000, TRW(L"Среднее (4 Мбит/с)")},
+                            {8000, TRW(L"Высокое (8 Мбит/с)")}, {16000, TRW(L"Максимум (16 Мбит/с)")}};
 
 // softcam sender API (loaded at runtime from PhoneCamVirtual64.dll)
 using scCreateCamera_t = void*(__cdecl*)(int, int, float);
@@ -93,6 +94,7 @@ struct App {
     std::wstring saved_ip;      // IP text while the field shows the code
     HWND ip_label{};
     bool tray_added = false;
+    bool restart = false;         // relaunch after the message loop (language change)
     RECT battery_rc{};
     int battery = -1;             // phone battery %, -1 = unknown
     bool charging = false;
@@ -113,7 +115,7 @@ struct App {
 
     Client client;
     std::atomic<bool> connected{false};
-    std::wstring status = L"Не подключено";
+    std::wstring status = TRW(L"Не подключено");
     State state = State::Idle;
 
     // preview buffer
@@ -301,12 +303,12 @@ void UpdateVcamUi() {
     if (g.h[IDC_VCAMHINT - 100]) ShowWindow(g.h[IDC_VCAMHINT - 100], reg ? SW_HIDE : SW_SHOW);
     if (HWND st = g.h[IDS_VCAM_STATE - 100]) {
         std::wstring t = !g.vcam_result.empty() ? g.vcam_result
-            : reg ? L"Вебка «PhoneCam» установлена. Выбирай её в Discord, Zoom, Telegram, OBS и т.д. - картинка идёт, пока программа подключена к телефону."
-                  : L"Вебка не установлена. Установи её, чтобы телефон появился как камера в Discord, Zoom и других программах.";
+            : reg ? TRW(L"Вебка «PhoneCam» установлена. Выбирай её в Discord, Zoom, Telegram, OBS и т.д. - картинка идёт, пока программа подключена к телефону.")
+                  : TRW(L"Вебка не установлена. Установи её, чтобы телефон появился как камера в Discord, Zoom и других программах.");
         SetWindowTextW(st, t.c_str());
     }
     if (HWND b = g.h[IDS_VCAM_BTN - 100]) {
-        if (!g.vcam_busy) SetWindowTextW(b, reg ? L"Удалить вебку" : L"Установить вебку");
+        if (!g.vcam_busy) SetWindowTextW(b, reg ? TRW(L"Удалить вебку") : TRW(L"Установить вебку"));
         g.kind[IDS_VCAM_BTN - 100] = reg ? 1 : 2;   // install is the primary action
         InvalidateRect(b, nullptr, FALSE);
     }
@@ -388,11 +390,11 @@ void StartVcamJob() {
 
 void OnVcamDone(bool install, int result) {
     g.vcam_busy = false;
-    g.vcam_result = result == 2 ? L"Рядом с программой нет PhoneCamVirtual64.dll - переложи все файлы PhoneCam в одну папку."
-                  : result == 0 ? (install ? L"Не получилось установить: нужны права администратора (нажми «Да» в окне Windows)."
-                                           : L"Не получилось удалить: нужны права администратора.")
-                  : install ? L"Готово! Вебка «PhoneCam» установлена. Если Discord/Zoom были открыты - перезапусти их."
-                            : L"Вебка «PhoneCam» удалена из системы.";
+    g.vcam_result = result == 2 ? TRW(L"Рядом с программой нет PhoneCamVirtual64.dll - переложи все файлы PhoneCam в одну папку.")
+                  : result == 0 ? (install ? TRW(L"Не получилось установить: нужны права администратора (нажми «Да» в окне Windows).")
+                                           : TRW(L"Не получилось удалить: нужны права администратора."))
+                  : install ? TRW(L"Готово! Вебка «PhoneCam» установлена. Если Discord/Zoom были открыты - перезапусти их.")
+                            : TRW(L"Вебка «PhoneCam» удалена из системы.");
     if (g.settings) {
         ShowWindow(g.h[IDS_VCAM_PROG - 100], SW_HIDE);
         ShowWindow(g.h[IDS_VCAM_BTN - 100], SW_SHOW);
@@ -531,7 +533,7 @@ void SetControlsEnabled(bool idle) {
     EnableWindow(g.h[IDC_AF - 100], !idle);
     EnableWindow(g.h[IDC_ORIENT - 100], !idle && !Checked(IDC_TG));  // the browser follows the phone's rotation itself
     InvalidateRect(g.wnd, &g.ip_field, FALSE);
-    SetWindowTextW(g.h[IDC_CONNECT - 100], idle ? L"Подключить" : L"Отключить");
+    SetWindowTextW(g.h[IDC_CONNECT - 100], idle ? TRW(L"Подключить") : TRW(L"Отключить"));
 }
 
 int SelectedFps() {
@@ -552,7 +554,7 @@ std::string SelectedSide() {
 // Front camera has no flash: the same control switches the phone screen to white (screen light).
 void UpdateTorchLabel() {
     if (HWND t = g.h[IDC_TORCH - 100]) {
-        SetWindowTextW(t, SelectedSide() == "front" ? L"Подсветка" : L"Фонарик");
+        SetWindowTextW(t, SelectedSide() == "front" ? TRW(L"Подсветка") : TRW(L"Фонарик"));
         InvalidateRect(t, nullptr, FALSE);
     }
 }
@@ -565,7 +567,7 @@ void RefreshCameraList() {
     if (Checked(IDC_TG)) wide = true;  // the phone page uses it if the phone has one
     std::string keep = g.wanted_side;
     SendMessageW(cb, CB_RESETCONTENT, 0, 0);
-    const wchar_t* names[] = {L"Основная (задняя)", L"Широкоугольная", L"Фронтальная"};
+    const wchar_t* names[] = {TRW(L"Основная (задняя)"), TRW(L"Широкоугольная"), TRW(L"Фронтальная")};
     int sel = 0;
     for (int k = 0; k < 3; k++) {
         if (k == 1 && !wide) continue;
@@ -594,7 +596,7 @@ void RefreshFpsList() {
     int sel = -1, best = -1;
     for (size_t i = 0; i < list.size(); i++) {
         std::wstring t = std::to_wstring(list[i]) + L" fps";
-        if (list[i] == 60 && normal_max < 60) t += L" (скоростная)";
+        if (list[i] == 60 && normal_max < 60) t += TRW(L" (скоростная)");
         int idx = (int)SendMessageW(cb, CB_ADDSTRING, 0, (LPARAM)t.c_str());
         SendMessageW(cb, CB_SETITEMDATA, idx, list[i]);
         if (list[i] == g.wanted_fps) sel = idx;
@@ -608,9 +610,9 @@ std::wstring CapsSummary() {
     const Res& r = kRes[Sel(IDC_RES)];
     const CamCaps* c = FindCaps(g.caps, SelectedSide(), r.w, r.h);
     if (!c) return L"";
-    std::wstring s = L"Камера телефона в " + std::to_wstring(c->w) + L"×" + std::to_wstring(c->h) + L": до " +
-                     std::to_wstring(c->max_fps) + L" к/с";
-    if (c->max_fps < 60) s += c->hs_fps >= 60 ? L", 60 - через скоростную съёмку" : L", скоростной съёмки нет";
+    std::wstring s = TRW(L"Камера телефона в ") + std::to_wstring(c->w) + L"×" + std::to_wstring(c->h) + TRW(L": до ") +
+                     std::to_wstring(c->max_fps) + TRW(L" к/с");
+    if (c->max_fps < 60) s += c->hs_fps >= 60 ? TRW(L", 60 - через скоростную съёмку") : TRW(L", скоростной съёмки нет");
     return s;
 }
 
@@ -662,8 +664,8 @@ void ApplyMode() {
         SetWindowTextW(ip, g.saved_ip.c_str());
     }
     SendMessageW(ip, EM_SETREADONLY, tg, 0);
-    SetWindowTextW(g.ip_label, tg ? L"Код для телефона" : L"IP телефона (показан в приложении)");
-    SetWindowTextW(g.h[IDC_FIND - 100], tg ? L"Новый код" : L"Найти");
+    SetWindowTextW(g.ip_label, tg ? TRW(L"Код для телефона") : TRW(L"IP телефона (показан в приложении)"));
+    SetWindowTextW(g.h[IDC_FIND - 100], tg ? TRW(L"Новый код") : TRW(L"Найти"));
     if (!g.connected) {
         EnableWindow(ip, !Checked(IDC_USB));
         EnableWindow(g.h[IDC_FIND - 100], !Checked(IDC_USB));
@@ -678,7 +680,7 @@ void ApplyMode() {
         SetCheck(IDC_HS, false);
         EnableWindow(g.h[IDC_HS - 100], FALSE);
         if (!g.connected) SetWindowTextW(g.h[IDC_STATUS - 100],
-            L"Телеграм: подходит для iPhone и любого телефона. Нажми «Подключить», потом наведи камеру телефона на QR-код.");
+            TRW(L"Телеграм: подходит для iPhone и любого телефона. Нажми «Подключить», потом наведи камеру телефона на QR-код."));
     }
     InvalidateRect(g.wnd, &g.ip_field, TRUE);
     InvalidateRect(g.wnd, &g.preview_rc, FALSE);
@@ -691,7 +693,7 @@ void Connect() {
         SetBattery(-1, false);
         VcamClose();
         SetControlsEnabled(true);
-        g.status = L"Не подключено";
+        g.status = TRW(L"Не подключено");
         SetWindowTextW(g.h[IDC_STATUS - 100], g.status.c_str());
         { std::lock_guard<std::mutex> lk(g.pmu); g.pw = g.ph = 0; }
         InvalidateRect(g.wnd, &g.preview_rc, FALSE);
@@ -705,7 +707,7 @@ void Connect() {
     c.host = U8(GetText(g.h[IDC_IP - 100]));
     while (!c.host.empty() && c.host.back() == ' ') c.host.pop_back();
     if (!c.web && !c.usb && c.host.empty()) {
-        MessageBoxW(g.wnd, L"Введи IP-адрес, который показывает приложение на телефоне, или нажми «Найти».",
+        MessageBoxW(g.wnd, TRW(L"Введи IP-адрес, который показывает приложение на телефоне, или нажми «Найти»."),
                     L"PhoneCam", MB_ICONINFORMATION);
         return;
     }
@@ -761,7 +763,7 @@ constexpr int kL = 20;         // left margin
 constexpr int kW = 280;        // content width
 
 const wchar_t* kHsTip =
-    L"ЭКСПЕРИМЕНТАЛЬНЫЙ режим: 60 FPS через скоростную съёмку\n"
+    TRW(L"ЭКСПЕРИМЕНТАЛЬНЫЙ режим: 60 FPS через скоростную съёмку\n"
     L"(возможны баги и нестабильная работа)\n\n"
     L"Как работает: камера телефона включает режим замедленной съёмки (120 кадров/с), а телефон отдаёт "
     L"в видео только каждый второй кадр. Получаются честные 60 кадров/с, даже если обычный режим камеры "
@@ -769,7 +771,7 @@ const wchar_t* kHsTip =
     L"Когда включать: если нужна плавная картинка - движение, игры, стрим или запись в OBS на 60 FPS.\n\n"
     L"Минусы: при слабом освещении картинка темнее и шумнее (выдержка не длиннее 1/120 с), телефон сильнее "
     L"греется и быстрее разряжается.\n\n"
-    L"Не нужно для Discord, Zoom и Telegram: они всё равно показывают вебку максимум в 30 кадров/с.";
+    L"Не нужно для Discord, Zoom и Telegram: они всё равно показывают вебку максимум в 30 кадров/с.");
 
 void ApplyTitleBarTheme(HWND wnd = nullptr) {
     if (!wnd) wnd = g.wnd;
@@ -868,12 +870,12 @@ void AddSmartBrightnessTip(HWND owner, HWND target) {
                               CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, owner, nullptr, g.inst,
                               nullptr);
     static const wchar_t* tip =
-        L"Умная яркость PhoneCam\n\n"
+        TRW(L"Умная яркость PhoneCam\n\n"
         L"Включается сама, только когда света реально не хватает: в тёмной комнате, в режиме 60 FPS, "
         L"на слабой камере или при зафиксированной экспозиции. Если камера телефона справляется сама, "
         L"ничего не делает.\n\n"
         L"Плавно вытягивает тени и средние тона, яркие места (лампы, окна) не трогает. Никогда не затемняет.\n\n"
-        L"В темноте картинка становится светлее, но немного шумнее: это усиление на ПК, а не настоящий свет.";
+        L"В темноте картинка становится светлее, но немного шумнее: это усиление на ПК, а не настоящий свет.");
     TOOLINFOW ti{};
     ti.cbSize = sizeof ti;
     ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
@@ -895,73 +897,73 @@ void BuildUi() {
     Button(IDC_GEAR, L"", L + kW - 74, 22, 34, 34, false, g.symbol);
     g.kind[IDC_GEAR - 100] = 5;
 
-    Label(L"Подключение", L, y, kW - 100, g.bold, 2);
+    Label(TRW(L"Подключение"), L, y, kW - 100, g.bold, 2);
     g.battery_rc = {S(L + kW - 100), S(y - 2), S(L + kW), S(y + 20)};
     y += 26;
     Radio(IDC_WIFI, L"Wi-Fi", L, y, 72);
     Radio(IDC_USB, L"USB", L + 80, y, 66);
-    Radio(IDC_TG, L"Телеграм", L + 154, y, 126);
+    Radio(IDC_TG, TRW(L"Телеграм"), L + 154, y, 126);
     y += 30;
-    g.ip_label = Label(L"IP телефона (показан в приложении)", L, y, kW, nullptr, 1);
+    g.ip_label = Label(TRW(L"IP телефона (показан в приложении)"), L, y, kW, nullptr, 1);
     y += 21;
     g.ip_field = {S(L), S(y), S(L + 190), S(y + 30)};
     Make(WC_EDITW, L"", ES_AUTOHSCROLL | WS_TABSTOP, L + 8, y + 6, 176, 20, IDC_IP);
-    Button(IDC_FIND, L"Найти", L + 198, y, 82, 30);
+    Button(IDC_FIND, TRW(L"Найти"), L + 198, y, 82, 30);
     y += 44;
 
-    Label(L"Камера", L, y, kW, g.bold, 2);
+    Label(TRW(L"Камера"), L, y, kW, g.bold, 2);
     y += 26;
-    Label(L"Камера телефона", L, y, 135, nullptr, 1);
-    Label(L"Разрешение", L + 145, y, 135, nullptr, 1);
+    Label(TRW(L"Камера телефона"), L, y, 135, nullptr, 1);
+    Label(TRW(L"Разрешение"), L + 145, y, 135, nullptr, 1);
     y += 20;
     Combo(IDC_CAMERA, L, y, 135);  // filled by RefreshCameraList()
     HWND res = Combo(IDC_RES, L + 145, y, 135);
     for (auto& r : kRes) SendMessageW(res, CB_ADDSTRING, 0, (LPARAM)r.name);
     y += 36;
-    Label(L"Кадров/с", L, y, 135, nullptr, 1);
-    Label(L"Качество", L + 145, y, 135, nullptr, 1);
+    Label(TRW(L"Кадров/с"), L, y, 135, nullptr, 1);
+    Label(TRW(L"Качество"), L + 145, y, 135, nullptr, 1);
     y += 20;
     Combo(IDC_FPS, L, y, 135);  // filled by RefreshFpsList() from the phone's capabilities
     HWND q = Combo(IDC_QUALITY, L + 145, y, 135);
     for (auto& k : kQuality) SendMessageW(q, CB_ADDSTRING, 0, (LPARAM)k.name);
     y += 38;
 
-    CheckBox(IDC_MIRROR, L"Отразить зеркально", L, y, 150);
-    CheckBox(IDC_ROT, L"Повернуть 180°", L + 150, y, 130);
+    CheckBox(IDC_MIRROR, TRW(L"Отразить зеркально"), L, y, 150);
+    CheckBox(IDC_ROT, TRW(L"Повернуть 180°"), L + 150, y, 130);
     y += 28;
-    const wchar_t* sb = L"Умная яркость PhoneCam";
+    const wchar_t* sb = TRW(L"Умная яркость PhoneCam");
     int sbw = (int)(TextWidth(g.font, sb) / g.dpi) + 28;
     CheckBox(IDS_AUTOBRI, sb, L, y, sbw);
     HWND sbinfo = Make(L"STATIC", L"", SS_OWNERDRAW | SS_NOTIFY, L + sbw + 4, y + 2, 18, 18, IDC_WARN2);
     AddSmartBrightnessTip(g.wnd, sbinfo);
     y += 28;
-    const wchar_t* hs = L"60 FPS через скоростную съёмку";
+    const wchar_t* hs = TRW(L"60 FPS через скоростную съёмку");
     int hsw = (int)(TextWidth(g.font, hs) / g.dpi) + 28;
     CheckBox(IDC_HS, hs, L, y, hsw);
     HWND warn = Make(L"STATIC", L"", SS_OWNERDRAW | SS_NOTIFY, L + hsw + 4, y + 2, 18, 18, IDC_WARN);
     y += 36;
 
-    Label(L"Управление", L, y, kW, g.bold, 2);
+    Label(TRW(L"Управление"), L, y, kW, g.bold, 2);
     y += 26;
-    Button(IDC_ORIENT, L"Горизонтально", L, y, 135, 30);
-    Button(IDC_AF, L"Фокус", L + 145, y, 135, 30);
+    Button(IDC_ORIENT, TRW(L"Горизонтально"), L, y, 135, 30);
+    Button(IDC_AF, TRW(L"Фокус"), L + 145, y, 135, 30);
     y += 38;
-    CheckBox(IDC_TORCH, L"Фонарик", L, y, 100);
-    Label(L"Зум", L + 112, y + 2, 30, nullptr, 1);
+    CheckBox(IDC_TORCH, TRW(L"Фонарик"), L, y, 100);
+    Label(TRW(L"Зум"), L + 112, y + 2, 30, nullptr, 1);
     HWND z = Make(L"PhoneCamSlider", L"", WS_TABSTOP, L + 140, y - 4, 140, 30, IDC_ZOOM);
     SendMessageW(z, TBM_SETRANGE, TRUE, MAKELPARAM(10, 50));
     SendMessageW(z, TBM_SETPOS, TRUE, 10);
     y += 30;
-    Label(L"Если фонарик или зум не отвечают - переподключись.", L, y, kW, nullptr, 1, 36);
+    Label(TRW(L"Если фонарик или зум не отвечают - переподключись."), L, y, kW, nullptr, 1, 36);
     y += 40;
 
-    Button(IDC_CONNECT, L"Подключить", L, y, kW, 42, true, g.bold);
+    Button(IDC_CONNECT, TRW(L"Подключить"), L, y, kW, 42, true, g.bold);
     y += 52;
-    Make(L"STATIC", L"Не подключено", SS_LEFT, L, y, kW, 84, IDC_STATUS);
+    Make(L"STATIC", TRW(L"Не подключено"), SS_LEFT, L, y, kW, 84, IDC_STATUS);
     y += 88;
 
     // shown only while the virtual camera isn't installed; opens the settings with the install button highlighted
-    Button(IDC_VCAMHINT, L"Вебка «PhoneCam» не установлена\nНажми, чтобы установить", L, y, kW, 50);
+    Button(IDC_VCAMHINT, TRW(L"Вебка «PhoneCam» не установлена\nНажми, чтобы установить"), L, y, kW, 50);
     g.kind[IDC_VCAMHINT - 100] = 7;
 
     // tooltip for the high-speed warning icon
@@ -1395,7 +1397,7 @@ void PaintHeader(HDC dc) {
     TextOutW(dc, tx + sz.cx, y - S(3), L"Cam", 3);
     SelectObject(dc, g.font);
     SetTextColor(dc, t.sub);
-    TextOutW(dc, tx + S(1), y + S(24), L"телефон как вебкамера", 21);
+    TextOutW(dc, tx + S(1), y + S(24), TRW(L"телефон как вебкамера"), 21);
     SelectObject(dc, of);
 }
 
@@ -1410,14 +1412,14 @@ void PaintTgPairing(HDC dc, RECT r) {
     QrCode q = MakeQr(TgLink());
     int aw = r.right - r.left, ah = r.bottom - r.top;
     const wchar_t* steps = g.connected
-        ? L"Ждём телефон…\n\n1. Наведи камеру телефона на QR-код - откроется бот @phonecamweb_bot\n"
+        ? TRW(L"Ждём телефон…\n\n1. Наведи камеру телефона на QR-код - откроется бот @phonecamweb_bot\n"
           L"2. Нажми «Запустить», потом «Открыть камеру»\n"
           L"3. Разреши доступ к камере\n"
-          L"Или в боте: «Сканировать QR-код» / ввести код вручную"
-        : L"Нажми «Подключить», потом на телефоне:\n\n1. Наведи камеру телефона на QR-код - откроется бот @phonecamweb_bot\n"
+          L"Или в боте: «Сканировать QR-код» / ввести код вручную")
+        : TRW(L"Нажми «Подключить», потом на телефоне:\n\n1. Наведи камеру телефона на QR-код - откроется бот @phonecamweb_bot\n"
           L"2. Нажми «Запустить», потом «Открыть камеру»\n"
           L"3. Разреши доступ к камере\n"
-          L"Или в боте: «Сканировать QR-код» / ввести код вручную";
+          L"Или в боте: «Сканировать QR-код» / ввести код вручную");
     HFONT old = (HFONT)SelectObject(dc, g.font);
     RECT calc{0, 0, aw - S(60), 0};
     int th = DrawTextW(dc, steps, -1, &calc, DT_CENTER | DT_WORDBREAK | DT_CALCRECT);
@@ -1484,11 +1486,11 @@ void PaintPreview(HDC dc) {
         SetTextColor(dc, t.preview_text);
         HFONT old = (HFONT)SelectObject(dc, g.font);
         const wchar_t* tx = g.connected
-            ? L"Ждём картинку с телефона…"
-            : L"1. Открой PhoneCam на телефоне (телефон и ПК в одной Wi-Fi сети)\n"
+            ? TRW(L"Ждём картинку с телефона…")
+            : TRW(L"1. Открой PhoneCam на телефоне (телефон и ПК в одной Wi-Fi сети)\n"
               L"2. Впиши IP с экрана телефона или нажми «Найти»\n"
               L"3. Нажми «Подключить»\n\n"
-              L"Для USB: включи на телефоне «Отладку по USB» и положи adb.exe рядом с программой.";
+              L"Для USB: включи на телефоне «Отладку по USB» и положи adb.exe рядом с программой.");
         RECT tr = r;
         InflateRect(&tr, -S(30), -S(30));
         RECT calc = tr;
@@ -1501,17 +1503,17 @@ void PaintPreview(HDC dc) {
 }
 
 void UpdateOrientButton() {
-    SetWindowTextW(g.h[IDC_ORIENT - 100], g.portrait ? L"Вертикально" : L"Горизонтально");
+    SetWindowTextW(g.h[IDC_ORIENT - 100], g.portrait ? TRW(L"Вертикально") : TRW(L"Горизонтально"));
     InvalidateRect(g.h[IDC_ORIENT - 100], nullptr, FALSE);
 }
 
 
 // ---------- image settings window (gear button) ----------
 struct Choice { int value; const wchar_t* name; };
-const Choice kWb[] = {{1, L"Авто"}, {5, L"Дневной свет"}, {6, L"Облачно"}, {2, L"Лампа накаливания"},
-                      {3, L"Люминесцентная лампа"}};
-const Choice kEdge[] = {{-1, L"Как в камере"}, {0, L"Выключена"}, {1, L"Обычная"}, {2, L"Высокая"}};
-const Choice kNr[] = {{-1, L"Как в камере"}, {0, L"Выключено"}, {1, L"Обычное"}, {2, L"Сильное"}};
+const Choice kWb[] = {{1, TRW(L"Авто")}, {5, TRW(L"Дневной свет")}, {6, TRW(L"Облачно")}, {2, TRW(L"Лампа накаливания")},
+                      {3, TRW(L"Люминесцентная лампа")}};
+const Choice kEdge[] = {{-1, TRW(L"Как в камере")}, {0, TRW(L"Выключена")}, {1, TRW(L"Обычная")}, {2, TRW(L"Высокая")}};
+const Choice kNr[] = {{-1, TRW(L"Как в камере")}, {0, TRW(L"Выключено")}, {1, TRW(L"Обычное")}, {2, TRW(L"Сильное")}};
 
 constexpr int kSetW = 420;
 
@@ -1553,7 +1555,7 @@ void UpdateValueLabels() {
     SetWindowTextW(g.h[IDS_SAT_VAL - 100], b);
     swprintf(b, 32, L"%.2f", g.adj.gamma / 100.0);
     SetWindowTextW(g.h[IDS_GAM_VAL - 100], b);
-    swprintf(b, 32, g.adj.temperature < 0 ? L"холодн. %d" : g.adj.temperature > 0 ? L"тёпл. %d" : L"0", abs(g.adj.temperature));
+    swprintf(b, 32, g.adj.temperature < 0 ? TRW(L"холодн. %d") : g.adj.temperature > 0 ? TRW(L"тёпл. %d") : L"0", abs(g.adj.temperature));
     SetWindowTextW(g.h[IDS_TMP_VAL - 100], b);
     swprintf(b, 32, L"%d", g.adj.sharpness);
     SetWindowTextW(g.h[IDS_SHP_VAL - 100], b);
@@ -1580,41 +1582,54 @@ void SyncSettingsControls() {
     UpdateValueLabels();
 }
 
+void ExitApp();
+
 void BuildSettingsUi(HWND wnd) {
     g.make_parent = wnd;
     const int L = 20, LW = 128, SX = 140, SW = 196, VX = 344;
     int y = 16;
-    Label(L"Камера телефона", L, y, 360, g.bold, 2);
+    Label(TRW(L"Язык"), L, y + 3, LW, g.bold, 2);
+    {
+        HWND cb = Combo(IDS_LANG, SX, y, 250);
+        for (const wchar_t* n : {TRW(L"Авто (как в Windows)"), L"Русский", L"English", L"Українська"})
+            SendMessageW(cb, CB_ADDSTRING, 0, (LPARAM)n);
+        wchar_t v[16] = L"";
+        GetPrivateProfileStringW(L"phonecam", L"lang", L"auto", v, 16, g.ini.c_str());
+        std::wstring lv(v);
+        SendMessageW(cb, CB_SETCURSEL, lv == L"ru" ? 1 : lv == L"en" ? 2 : lv == L"uk" ? 3 : 0, 0);
+    }
+    y += 44;
+    Label(TRW(L"Камера телефона"), L, y, 360, g.bold, 2);
     y += 28;
-    Label(L"Экспозиция", L, y + 4, LW);
+    Label(TRW(L"Экспозиция"), L, y + 4, LW);
     Slider(IDS_EV, SX, y, SW, -30, 30, 0);
     Make(L"STATIC", L"", SS_LEFT, VX, y + 4, 60, 20, IDS_EV_VAL);
     SetPropW(g.h[IDS_EV_VAL - 100], L"pc_kind", (HANDLE)(INT_PTR)2);
     y += 36;
-    Label(L"Баланс белого", L, y + 3, LW);
+    Label(TRW(L"Баланс белого"), L, y + 3, LW);
     Combo(IDS_WB, SX, y, 250);
     y += 34;
-    Label(L"Резкость камеры", L, y + 3, LW);
+    Label(TRW(L"Резкость камеры"), L, y + 3, LW);
     Combo(IDS_EDGE, SX, y, 250);
     y += 34;
-    Label(L"Шумоподавление", L, y + 3, LW);
+    Label(TRW(L"Шумоподавление"), L, y + 3, LW);
     Combo(IDS_NR, SX, y, 250);
     y += 36;
-    CheckBox(IDS_AELOCK, L"Зафиксировать экспозицию", L, y, 360);
+    CheckBox(IDS_AELOCK, TRW(L"Зафиксировать экспозицию"), L, y, 360);
     y += 26;
-    CheckBox(IDS_AWBLOCK, L"Зафиксировать баланс белого", L, y, 360);
+    CheckBox(IDS_AWBLOCK, TRW(L"Зафиксировать баланс белого"), L, y, 360);
     y += 28;
-    Label(L"Это делает сама камера телефона, поэтому качество не теряется. Если телефон что-то не "
-          L"поддерживает, настройка просто не сработает. Резкость и шумоподавление не работают в режиме 60 FPS.",
+    Label(TRW(L"Это делает сама камера телефона, поэтому качество не теряется. Если телефон что-то не "
+          L"поддерживает, настройка просто не сработает. Резкость и шумоподавление не работают в режиме 60 FPS."),
           L, y, 380, nullptr, 1, 52);
     y += 64;
 
-    Label(L"Обработка на ПК", L, y, 360, g.bold, 2);
+    Label(TRW(L"Обработка на ПК"), L, y, 360, g.bold, 2);
     y += 28;
     struct Row { const wchar_t* name; int id, val, lo, hi; };
-    Row rows[] = {{L"Яркость", IDS_BRI, IDS_BRI_VAL, -100, 100}, {L"Контраст", IDS_CON, IDS_CON_VAL, -100, 100},
-                  {L"Насыщенность", IDS_SAT, IDS_SAT_VAL, -100, 100}, {L"Гамма", IDS_GAM, IDS_GAM_VAL, 50, 200},
-                  {L"Температура", IDS_TMP, IDS_TMP_VAL, -100, 100}, {L"Резкость", IDS_SHP, IDS_SHP_VAL, 0, 100}};
+    Row rows[] = {{TRW(L"Яркость"), IDS_BRI, IDS_BRI_VAL, -100, 100}, {TRW(L"Контраст"), IDS_CON, IDS_CON_VAL, -100, 100},
+                  {TRW(L"Насыщенность"), IDS_SAT, IDS_SAT_VAL, -100, 100}, {TRW(L"Гамма"), IDS_GAM, IDS_GAM_VAL, 50, 200},
+                  {TRW(L"Температура"), IDS_TMP, IDS_TMP_VAL, -100, 100}, {TRW(L"Резкость"), IDS_SHP, IDS_SHP_VAL, 0, 100}};
     for (auto& r : rows) {
         Label(r.name, L, y + 4, LW);
         Slider(r.id, SX, y, SW, r.lo, r.hi, 0);
@@ -1622,9 +1637,9 @@ void BuildSettingsUi(HWND wnd) {
         SetPropW(g.h[r.val - 100], L"pc_kind", (HANDLE)(INT_PTR)2);
         y += 34;
     }
-    Label(L"Применяется к вебке «PhoneCam» и превью. Работает с любым телефоном.", L, y, 380, nullptr, 1, 36);
+    Label(TRW(L"Применяется к вебке «PhoneCam» и превью. Работает с любым телефоном."), L, y, 380, nullptr, 1, 36);
     y += 40;
-    Label(L"Виртуальная вебка", L, y, 360, g.bold, 2);
+    Label(TRW(L"Виртуальная вебка"), L, y, 360, g.bold, 2);
     y += 26;
     Make(L"STATIC", L"", SS_LEFT, L, y, 380, 40, IDS_VCAM_STATE);
     SetPropW(g.h[IDS_VCAM_STATE - 100], L"pc_kind", (HANDLE)(INT_PTR)2);
@@ -1633,11 +1648,11 @@ void BuildSettingsUi(HWND wnd) {
     Make(L"PhoneCamProgress", L"", 0, L, y, 380, 36, IDS_VCAM_PROG);
     ShowWindow(g.h[IDS_VCAM_PROG - 100], g.vcam_busy ? SW_SHOW : SW_HIDE);
     ShowWindow(g.h[IDS_VCAM_BTN - 100], g.vcam_busy ? SW_HIDE : SW_SHOW);
-    if (g.vcam_busy) SetWindowTextW(g.h[IDS_VCAM_PROG - 100], g.vcam_installing ? L"Идёт установка…" : L"Идёт удаление…");
+    if (g.vcam_busy) SetWindowTextW(g.h[IDS_VCAM_PROG - 100], g.vcam_installing ? TRW(L"Идёт установка…") : TRW(L"Идёт удаление…"));
     g.vcam_fade = 1.0f;
     y += 50;
-    Button(IDS_RESET, L"Сбросить всё", L, y, 150, 34);
-    Button(IDS_DONE, L"Готово", kSetW - L - 150, y, 150, 34, true, g.bold);
+    Button(IDS_RESET, TRW(L"Сбросить всё"), L, y, 150, 34);
+    Button(IDS_DONE, TRW(L"Готово"), kSetW - L - 150, y, 150, 34, true, g.bold);
     g.make_parent = nullptr;
     ApplyControlThemes();
     SyncSettingsControls();
@@ -1716,6 +1731,20 @@ LRESULT CALLBACK SettingsProc(HWND w, UINT m, WPARAM wp, LPARAM lp) {
             OnSettingsChanged(false);
             break;
         case IDS_DONE: DestroyWindow(w); break;
+        case IDS_LANG:
+            if (HIWORD(wp) == CBN_SELCHANGE) {
+                int sel = (int)SendMessageW(g.h[IDS_LANG - 100], CB_GETCURSEL, 0, 0);
+                const wchar_t* codes[] = {L"auto", L"ru", L"en", L"uk"};
+                IniSet(L"lang", codes[sel < 0 || sel > 3 ? 0 : sel]);
+                SetLang(DetectLang());  // so the question below is already in the new language
+                if (MessageBoxW(w, TRW(L"Язык изменится после перезапуска программы. Перезапустить сейчас?"), L"PhoneCam",
+                                MB_YESNO | MB_ICONQUESTION) == IDYES) {
+                    g.restart = true;
+                    DestroyWindow(w);
+                    ExitApp();
+                }
+            }
+            break;
         case IDS_VCAM_BTN: StartVcamJob(); break;
         }
         return 0;
@@ -1728,7 +1757,7 @@ LRESULT CALLBACK SettingsProc(HWND w, UINT m, WPARAM wp, LPARAM lp) {
                 g.vcam_fade_dir = 0;
                 KillTimer(w, 1);
                 ShowWindow(g.h[IDS_VCAM_BTN - 100], SW_HIDE);
-                SetWindowTextW(g.h[IDS_VCAM_PROG - 100], g.vcam_installing ? L"Идёт установка…" : L"Идёт удаление…");
+                SetWindowTextW(g.h[IDS_VCAM_PROG - 100], g.vcam_installing ? TRW(L"Идёт установка…") : TRW(L"Идёт удаление…"));
                 ShowWindow(g.h[IDS_VCAM_PROG - 100], SW_SHOW);
                 CloseHandle(CreateThread(nullptr, 0, VcamThread, new VcamJob{g.vcam_installing, w}, 0, nullptr));
             } else if (g.vcam_fade >= 1.0f && g.vcam_fade_dir > 0) {
@@ -1761,11 +1790,11 @@ LRESULT CALLBACK SettingsProc(HWND w, UINT m, WPARAM wp, LPARAM lp) {
 
 void OpenSettings(bool highlight_install = false) {
     if (!g.settings) {
-    RECT r{0, 0, S(kSetW), S(748)};
+    RECT r{0, 0, S(kSetW), S(792)};
     AdjustWindowRect(&r, WS_CAPTION | WS_SYSMENU, FALSE);
     RECT mw;
     GetWindowRect(g.wnd, &mw);
-    CreateWindowExW(WS_EX_DLGMODALFRAME, L"PhoneCamSettings", L"Настройки изображения",
+    CreateWindowExW(WS_EX_DLGMODALFRAME, L"PhoneCamSettings", TRW(L"Настройки изображения"),
                     WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_VISIBLE | WS_CLIPCHILDREN,
                     mw.left + S(60), mw.top + S(30), r.right - r.left, r.bottom - r.top, g.wnd, nullptr, g.inst,
                     nullptr);
@@ -1783,7 +1812,7 @@ void OpenSettings(bool highlight_install = false) {
 // ---------- phone battery ----------
 std::wstring BatteryText() {
     std::wstring t = std::to_wstring(g.battery) + L"%";
-    if (g.charging) t += L" (заряжается)";
+    if (g.charging) t += TRW(L" (заряжается)");
     return t;
 }
 
@@ -1797,12 +1826,12 @@ void SetBattery(int pct, bool charging) {
     else if (pct > 20) g.bat_warned15 = g.bat_warned5 = false;
     if (pct >= 0 && !charging && pct <= 5 && !g.bat_warned5) {
         g.bat_warned5 = g.bat_warned15 = true;
-        TrayUpdate(false, L"Телефон почти разряжен - поставь его на зарядку, иначе трансляция скоро прервётся.",
-                   L"PhoneCam: батарея телефона почти села");
+        TrayUpdate(false, TRW(L"Телефон почти разряжен - поставь его на зарядку, иначе трансляция скоро прервётся."),
+                   TRW(L"PhoneCam: батарея телефона почти села"));
     } else if (pct >= 0 && !charging && pct <= 15 && !g.bat_warned15) {
         g.bat_warned15 = true;
-        TrayUpdate(false, (L"Осталось " + std::to_wstring(pct) + L"%. Поставь телефон на зарядку.").c_str(),
-                   L"PhoneCam: батарея телефона садится");
+        TrayUpdate(false, (TRW(L"Осталось ") + std::to_wstring(pct) + TRW(L"%. Поставь телефон на зарядку.")).c_str(),
+                   TRW(L"PhoneCam: батарея телефона садится"));
     } else if (changed) {
         TrayUpdate(false, nullptr, nullptr);
     }
@@ -1871,13 +1900,13 @@ void TrayUpdate(bool add, const wchar_t* balloon = nullptr, const wchar_t* title
     nd.uCallbackMessage = WM_APP_TRAY;
     nd.hIcon = (HICON)LoadImageW(g.inst, MAKEINTRESOURCEW(1), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON),
                                  GetSystemMetrics(SM_CYSMICON), 0);
-    std::wstring tip = g.connected ? (g.state == State::Streaming ? L"PhoneCam - идёт трансляция" : L"PhoneCam - подключение…")
-                                   : L"PhoneCam - не подключено";
-    if (g.battery >= 0) tip += L"\nБатарея телефона: " + BatteryText();
+    std::wstring tip = g.connected ? (g.state == State::Streaming ? TRW(L"PhoneCam - идёт трансляция") : TRW(L"PhoneCam - подключение…"))
+                                   : TRW(L"PhoneCam - не подключено");
+    if (g.battery >= 0) tip += TRW(L"\nБатарея телефона: ") + BatteryText();
     wcsncpy(nd.szTip, tip.c_str(), 127);
     if (balloon) {
         nd.uFlags |= NIF_INFO;
-        wcsncpy(nd.szInfoTitle, title ? title : L"PhoneCam работает в фоне", 63);
+        wcsncpy(nd.szInfoTitle, title ? title : TRW(L"PhoneCam работает в фоне"), 63);
         wcsncpy(nd.szInfo, balloon, 255);
         nd.dwInfoFlags = NIIF_INFO;
     }
@@ -1909,21 +1938,21 @@ void HideToTray() {
     if (!g.tray_hint_shown) {
         g.tray_hint_shown = true;
         IniSet(L"trayhint", L"1");
-        TrayUpdate(false, L"Программа свёрнута в трей и продолжает работать. Открыть - двойной клик по значку, "
-                          L"выйти - правой кнопкой -> «Выйти».");
+        TrayUpdate(false, TRW(L"Программа свёрнута в трей и продолжает работать. Открыть - двойной клик по значку, "
+                          L"выйти - правой кнопкой -> «Выйти»."));
     }
 }
 
 void TrayMenu() {
     HMENU m = CreatePopupMenu();
-    std::wstring bat = g.battery >= 0 ? L"Батарея телефона: " + BatteryText()
-                                      : std::wstring(L"Батарея телефона: нет подключения");
+    std::wstring bat = g.battery >= 0 ? TRW(L"Батарея телефона: ") + BatteryText()
+                                      : std::wstring(TRW(L"Батарея телефона: нет подключения"));
     AppendMenuW(m, MF_STRING | (g.battery >= 0 ? 0 : MF_GRAYED), ID_TRAY_BATTERY, bat.c_str());
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(m, MF_STRING, ID_TRAY_OPEN, L"Открыть");
-    AppendMenuW(m, MF_STRING, ID_TRAY_SETTINGS, L"Настройки");
+    AppendMenuW(m, MF_STRING, ID_TRAY_OPEN, TRW(L"Открыть"));
+    AppendMenuW(m, MF_STRING, ID_TRAY_SETTINGS, TRW(L"Настройки"));
     AppendMenuW(m, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(m, MF_STRING, ID_TRAY_EXIT, L"Выйти");
+    AppendMenuW(m, MF_STRING, ID_TRAY_EXIT, TRW(L"Выйти"));
     SetMenuDefaultItem(m, ID_TRAY_OPEN, FALSE);
     POINT pt;
     GetCursorPos(&pt);
@@ -1969,7 +1998,7 @@ LRESULT CALLBACK WndProc(HWND w, UINT m, WPARAM wp, LPARAM lp) {
         TrayUpdate(true);
         if (Checked(IDC_TG)) ApplyMode();
         else if (!Checked(IDC_USB) && GetWindowTextLengthW(g.h[IDC_IP - 100]) == 0)
-            SetWindowTextW(g.h[IDC_STATUS - 100], L"Введи IP телефона или нажми «Найти».");
+            SetWindowTextW(g.h[IDC_STATUS - 100], TRW(L"Введи IP телефона или нажми «Найти»."));
         return 0;
     case WM_SIZE:
         Layout();
@@ -2069,15 +2098,15 @@ LRESULT CALLBACK WndProc(HWND w, UINT m, WPARAM wp, LPARAM lp) {
     case WM_APP_FOUND: {
         auto* v = (std::vector<FoundPhone>*)lp;
         EnableWindow(g.h[IDC_FIND - 100], !g.connected);
-        SetWindowTextW(g.h[IDC_FIND - 100], L"Найти");
+        SetWindowTextW(g.h[IDC_FIND - 100], TRW(L"Найти"));
         if (v->empty()) {
-            MessageBoxW(w, L"Телефон не найден в сети.\n\nПроверь, что приложение PhoneCam открыто на телефоне "
-                           L"и что телефон с ПК в одной Wi-Fi сети. Можно вписать IP вручную.",
+            MessageBoxW(w, TRW(L"Телефон не найден в сети.\n\nПроверь, что приложение PhoneCam открыто на телефоне "
+                           L"и что телефон с ПК в одной Wi-Fi сети. Можно вписать IP вручную."),
                         L"PhoneCam", MB_ICONINFORMATION);
         } else {
             SetWindowTextW(g.h[IDC_IP - 100], W((*v)[0].ip).c_str());
-            std::wstring s = L"Найден: " + W((*v)[0].name) + L" (" + W((*v)[0].ip) + L")";
-            if (v->size() > 1) s += L"\nи ещё " + std::to_wstring(v->size() - 1);
+            std::wstring s = TRW(L"Найден: ") + W((*v)[0].name) + L" (" + W((*v)[0].ip) + L")";
+            if (v->size() > 1) s += TRW(L"\nи ещё ") + std::to_wstring(v->size() - 1);
             SetWindowTextW(g.h[IDC_STATUS - 100], s.c_str());
             StartCapsQuery();
         }
@@ -2101,10 +2130,10 @@ LRESULT CALLBACK WndProc(HWND w, UINT m, WPARAM wp, LPARAM lp) {
         } else if (!g.connected) {
             g.phone_found = false;
             UpdateCameraSettingsEnabled();
-            std::wstring where = res->first == "usb" ? L"по USB" : L"по адресу " + W(res->first);
+            std::wstring where = res->first == "usb" ? TRW(L"по USB") : TRW(L"по адресу ") + W(res->first);
             std::wstring msg = res->first.empty() || res->first == "?"
-                ? L"Введи IP телефона или нажми «Найти»."
-                : L"Телефон не найден " + where + L". Открой PhoneCam на телефоне или нажми «Найти». Настройки камеры станут доступны, когда телефон ответит.";
+                ? TRW(L"Введи IP телефона или нажми «Найти».")
+                : TRW(L"Телефон не найден ") + where + TRW(L". Открой PhoneCam на телефоне или нажми «Найти». Настройки камеры станут доступны, когда телефон ответит.");
             SetWindowTextW(g.h[IDC_STATUS - 100], msg.c_str());
         }
         delete res;
@@ -2146,8 +2175,8 @@ LRESULT CALLBACK WndProc(HWND w, UINT m, WPARAM wp, LPARAM lp) {
             break;
         case IDC_FIND:
             if (Checked(IDC_TG)) {
-                if (MessageBoxW(w, L"Сделать новый код? Телефонам, которые подключались со старым кодом, "
-                                   L"нужно будет отсканировать новый QR-код.", L"PhoneCam",
+                if (MessageBoxW(w, TRW(L"Сделать новый код? Телефонам, которые подключались со старым кодом, "
+                                   L"нужно будет отсканировать новый QR-код."), L"PhoneCam",
                                 MB_YESNO | MB_ICONQUESTION) == IDYES) {
                     g.tg_code = NewPairCode();
                     SaveSettings();
@@ -2157,7 +2186,7 @@ LRESULT CALLBACK WndProc(HWND w, UINT m, WPARAM wp, LPARAM lp) {
                 break;
             }
             EnableWindow(g.h[IDC_FIND - 100], FALSE);
-            SetWindowTextW(g.h[IDC_FIND - 100], L"Ищу…");
+            SetWindowTextW(g.h[IDC_FIND - 100], TRW(L"Ищу…"));
             CloseHandle(CreateThread(nullptr, 0, FindThread, nullptr, 0, nullptr));
             break;
         case IDC_MIRROR: g.client.SetMirror(Checked(IDC_MIRROR)); SaveSettings(); break;
@@ -2346,7 +2375,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int show) {
 
     RECT r{0, 0, S(1060), S(794)};
     AdjustWindowRect(&r, WS_OVERLAPPEDWINDOW, FALSE);
-    HWND w = CreateWindowExW(0, wc.lpszClassName, L"PhoneCam - телефон как вебкамера", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+    HWND w = CreateWindowExW(0, wc.lpszClassName, TRW(L"PhoneCam - телефон как вебкамера"), WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                              CW_USEDEFAULT, CW_USEDEFAULT, r.right - r.left, r.bottom - r.top, nullptr, nullptr,
                              inst, nullptr);
     ShowWindow(w, show);
@@ -2357,6 +2386,20 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, PWSTR, int show) {
         if (!IsDialogMessageW(w, &msg)) {
             TranslateMessage(&msg);
             DispatchMessageW(&msg);
+        }
+    }
+    if (g.restart) {
+        if (single) {
+            ReleaseMutex(single);
+            CloseHandle(single);
+        }
+        wchar_t exe[MAX_PATH];
+        GetModuleFileNameW(nullptr, exe, MAX_PATH);
+        STARTUPINFOW si{sizeof si};
+        PROCESS_INFORMATION pi{};
+        if (CreateProcessW(exe, nullptr, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi)) {
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
         }
     }
     return 0;

@@ -33,16 +33,16 @@ final class CameraReport {
         for (int i = 0; i < ids.size(); i++) {
             String id = ids.get(i);
             try {
-                describe(sb, m, id, i >= listed ? " (скрытая)" : "");
+                describe(sb, m, id, i >= listed ? L.t(" (скрытая)") : "");
                 if (Build.VERSION.SDK_INT >= 28) {
                     Set<String> phys = m.getCameraCharacteristics(id).getPhysicalCameraIds();
                     if (phys != null && !phys.isEmpty()) {
-                        sb.append("  физические камеры: ").append(phys).append('\n');
-                        for (String p : phys) if (!ids.contains(p)) describe(sb, m, p, " (физическая в " + id + ")");
+                        sb.append(L.t("  физические камеры: ")).append(phys).append('\n');
+                        for (String p : phys) if (!ids.contains(p)) describe(sb, m, p, L.t(" (физическая в ") + id + ")");
                     }
                 }
             } catch (Throwable t) {
-                sb.append("Камера ").append(id).append(": ошибка ").append(t).append('\n');
+                sb.append(L.t("Камера ")).append(id).append(L.t(": ошибка ")).append(t).append('\n');
             }
             sb.append('\n');
         }
@@ -52,17 +52,17 @@ final class CameraReport {
     private static void describe(StringBuilder sb, CameraManager m, String id, String note) throws Exception {
         CameraCharacteristics cc = m.getCameraCharacteristics(id);
         Integer f = cc.get(CameraCharacteristics.LENS_FACING);
-        String facing = f == null ? "?" : f == CameraCharacteristics.LENS_FACING_BACK ? "задняя"
-                : f == CameraCharacteristics.LENS_FACING_FRONT ? "фронтальная" : "внешняя";
+        String facing = f == null ? "?" : f == CameraCharacteristics.LENS_FACING_BACK ? L.t("задняя")
+                : f == CameraCharacteristics.LENS_FACING_FRONT ? L.t("фронтальная") : L.t("внешняя");
         Integer lvl = cc.get(CameraCharacteristics.INFO_SUPPORTED_HARDWARE_LEVEL);
         float[] focal = cc.get(CameraCharacteristics.LENS_INFO_AVAILABLE_FOCAL_LENGTHS);
-        sb.append("Камера ").append(id).append(note).append(": ").append(facing)
-                .append(", уровень ").append(level(lvl));
-        if (focal != null && focal.length > 0) sb.append(", фокус ").append(focal[0]).append("мм");
+        sb.append(L.t("Камера ")).append(id).append(note).append(": ").append(facing)
+                .append(L.t(", уровень ")).append(level(lvl));
+        if (focal != null && focal.length > 0) sb.append(L.t(", фокус ")).append(focal[0]).append(L.t("мм"));
         sb.append('\n');
 
         Range<Integer>[] ranges = cc.get(CameraCharacteristics.CONTROL_AE_AVAILABLE_TARGET_FPS_RANGES);
-        sb.append("  fps-диапазоны: ");
+        sb.append(L.t("  fps-диапазоны: "));
         if (ranges != null) for (Range<Integer> r : ranges) sb.append(r).append(' ');
         sb.append('\n');
 
@@ -72,14 +72,14 @@ final class CameraReport {
                 long d = 0;
                 try { d = map.getOutputMinFrameDuration(MediaCodec.class, s); } catch (Exception ignored) {}
                 sb.append("  ").append(s).append(": ")
-                        .append(d > 0 ? "макс " + Math.round(1e9 / d) + " к/с" : "нет").append('\n');
+                        .append(d > 0 ? L.t("макс ") + Math.round(1e9 / d) + L.t(" к/с") : L.t("нет")).append('\n');
             }
             int[] caps = cc.get(CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES);
             boolean hs = false;
             if (caps != null) for (int c : caps)
                 if (c == CameraCharacteristics.REQUEST_AVAILABLE_CAPABILITIES_CONSTRAINED_HIGH_SPEED_VIDEO) hs = true;
             if (hs) {
-                sb.append("  скоростная съёмка:");
+                sb.append(L.t("  скоростная съёмка:"));
                 for (Size s : map.getHighSpeedVideoSizes()) {
                     sb.append(' ').append(s).append('[');
                     for (Range<Integer> r : map.getHighSpeedVideoFpsRangesFor(s)) sb.append(r);

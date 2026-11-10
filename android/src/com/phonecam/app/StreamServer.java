@@ -96,10 +96,10 @@ final class StreamServer {
             serverSocket.setReuseAddress(true);
             serverSocket.bind(new InetSocketAddress(Protocol.TCP_PORT));
         } catch (IOException e) {
-            host.onStatus("Порт " + Protocol.TCP_PORT + " занят: " + e.getMessage(), false);
+            host.onStatus(L.t("Порт ") + Protocol.TCP_PORT + L.t(" занят: ") + e.getMessage(), false);
             return;
         }
-        host.onStatus("Ждём подключения с ПК…", false);
+        host.onStatus(L.t("Ждём подключения с ПК…"), false);
         while (alive) {
             try {
                 final Socket s = serverSocket.accept();
@@ -128,7 +128,7 @@ final class StreamServer {
             synchronized (this) {
                 if (current != null) {
                     OutputStream o = s.getOutputStream();
-                    o.write("PHC1 ERR телефон уже занят другим подключением\n".getBytes("UTF-8"));
+                    o.write(L.t("PHC1 ERR телефон уже занят другим подключением\n").getBytes("UTF-8"));
                     o.flush();
                     s.close();
                     return;
@@ -247,7 +247,7 @@ final class StreamServer {
                 if (p.length > 5) r.camera = p[5];
                 for (int i = 6; i < p.length; i++) if (p[i].equals("hs")) r.highSpeed = true;
 
-                host.onStatus("Подключается " + peer + "…", false);
+                host.onStatus(L.t("Подключается ") + peer + "…", false);
                 try {
                     started = host.startStream(r, this);
                     request = r;
@@ -265,7 +265,7 @@ final class StreamServer {
                 reqFps = r.fps;
                 targetKbps = currentKbps = r.kbps;
                 lastCongestion = System.nanoTime();
-                host.onStatus("Трансляция на " + peer + "  •  " + started.width + "×" + started.height
+                host.onStatus(L.t("Трансляция на ") + peer + "  •  " + started.width + "×" + started.height
                         + " " + started.fps + " fps", true);
 
                 final CameraStreamer csx = host.streamer();
@@ -293,7 +293,7 @@ final class StreamServer {
                 close();
                 if (started != null) host.stopStream();
                 current = null;
-                if (alive) host.onStatus("ПК отключился. Ждём подключения…", false);
+                if (alive) host.onStatus(L.t("ПК отключился. Ждём подключения…"), false);
             }
         }
 
@@ -391,7 +391,7 @@ final class StreamServer {
                     cs.requestKeyFrame();
                 } catch (Exception e) {
                     Log.w(TAG, "mode switch failed", e);
-                    host.onStatus("Ошибка переключения режима: " + e.getMessage(), false);
+                    host.onStatus(L.t("Ошибка переключения режима: ") + e.getMessage(), false);
                     close();
                 }
             }
@@ -447,7 +447,7 @@ final class StreamServer {
         }
 
         @Override public void onStreamError(String message) {
-            host.onStatus("Ошибка: " + message, false);
+            host.onStatus(L.t("Ошибка: ") + message, false);
             close();
         }
 
@@ -486,33 +486,33 @@ final class StreamServer {
                     if (now - statT0 >= 1000) {
                         double sec = (now - statT0) / 1000.0;
                         String st = String.format(java.util.Locale.US,
-                                "камера %.0f к/с (диапазон %s), кодер %.0f, отправлено %.0f (%.1f Мбит/с), сброшено %d, очередь %d%s",
+                                L.t("камера %.0f к/с (диапазон %s), кодер %.0f, отправлено %.0f (%.1f Мбит/с), сброшено %d, очередь %d%s"),
                                 cs.cameraFrames.getAndSet(0) / sec, cs.fpsRangeText,
                                 cs.encodedFrames.getAndSet(0) / sec, sentFrames / sec, sentBytes * 8 / sec / 1e6,
                                 droppedFrames, queue.size(),
-                                keyRequests > 0 ? ", запросов ключ. кадра " + keyRequests : "");
+                                keyRequests > 0 ? L.t(", запросов ключ. кадра ") + keyRequests : "");
                         maybeRaiseBitrate();
-                        if (phoneLatN > 0) st += String.format(java.util.Locale.US, ", на телефоне %d мс", phoneLatSum / phoneLatN / 1000);
+                        if (phoneLatN > 0) st += String.format(java.util.Locale.US, L.t(", на телефоне %d мс"), phoneLatSum / phoneLatN / 1000);
                         phoneLatSum = 0; phoneLatN = 0;
                         if (currentKbps < targetKbps)
-                            st += String.format(java.util.Locale.US, ", битрейт снижен до %.1f из %.1f Мбит/с (сеть не тянет)",
+                            st += String.format(java.util.Locale.US, L.t(", битрейт снижен до %.1f из %.1f Мбит/с (сеть не тянет)"),
                                     currentKbps / 1000.0, targetKbps / 1000.0);
                         if (!cs.controlsInfo.isEmpty()) st += ", " + cs.controlsInfo;
                         String fst = cs.focusStatus();
                         if (!fst.isEmpty()) st += ", " + fst;
                         String ts = cs.torchStatus();
-                        if (torchFallback) ts = "фонарик горит, временно 30 FPS (в режиме 60 FPS камера его не включает)";
+                        if (torchFallback) ts = L.t("фонарик горит, временно 30 FPS (в режиме 60 FPS камера его не включает)");
                         if (!ts.isEmpty()) st += ", " + ts;
-                        st += ", кодер: " + cs.encoderInfo;
+                        st += L.t(", кодер: ") + cs.encoderInfo;
                         int fails = cs.captureFailures.getAndSet(0);
-                        if (fails > 0) st += ", сбоев камеры " + fails;
+                        if (fails > 0) st += L.t(", сбоев камеры ") + fails;
                         sentFrames = 0; sentBytes = 0; droppedFrames = 0; keyRequests = 0;
                         statT0 = now;
                         synchronized (this) {
                             writePacket(Protocol.PKT_STATS, 0, st.getBytes("UTF-8"));
                             out.flush();
                         }
-                        host.onStatus("Трансляция на " + peerName + "\n" + st, true);
+                        host.onStatus(L.t("Трансляция на ") + peerName + "\n" + st, true);
                     }
                 }
             } catch (Exception e) {

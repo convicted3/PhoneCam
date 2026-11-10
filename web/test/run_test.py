@@ -3,7 +3,7 @@ from playwright.async_api import async_playwright
 async def main():
     async with async_playwright() as p:
         b = await p.chromium.launch(args=["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream", "--use-file-for-fake-video-capture=" + os.path.abspath("fake.y4m")])
-        ctx = await b.new_context()
+        ctx = await b.new_context(locale=os.environ.get("LOC","ru-RU"))
         await ctx.route("https://telegram.org/**", lambda r: r.fulfill(status=200, body="", content_type="text/javascript"))
         pg = await ctx.new_page()
         pg.on("console", lambda m: print("console:", m.text, flush=True))

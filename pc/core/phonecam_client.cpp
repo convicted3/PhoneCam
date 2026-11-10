@@ -17,6 +17,7 @@
 #include "qr.h"
 #include "web_link.h"
 #include "phonecam_client.h"
+#include "i18n.h"
 
 namespace phonecam {
 
@@ -71,7 +72,7 @@ SOCKET ConnectTo(const std::string& host, int port, int timeout_ms, std::string&
     char ps[16];
     snprintf(ps, sizeof ps, "%d", port);
     if (getaddrinfo(host.c_str(), ps, &hints, &res) != 0 || !res) {
-        err = "Неверный IP-адрес: " + host;
+        err = TR("Неверный IP-адрес: ") + host;
         return kBad;
     }
     SOCKET s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -86,8 +87,8 @@ SOCKET ConnectTo(const std::string& host, int port, int timeout_ms, std::string&
     int r = select(0, nullptr, &w, &e, &tv);
     if (r <= 0 || FD_ISSET(s, &e)) {
         closesocket(s);
-        err = r == 0 ? "Телефон не отвечает (" + host + "). Приложение открыто? Одна Wi-Fi сеть?"
-                     : "Не удалось подключиться к " + host;
+        err = r == 0 ? TR("Телефон не отвечает (") + host + TR("). Приложение открыто? Одна Wi-Fi сеть?")
+                     : TR("Не удалось подключиться к ") + host;
         return kBad;
     }
     nb = 0;
@@ -157,7 +158,7 @@ void Log(const std::string& line) {
 bool AdbForward(int port, std::string& err) {
     std::wstring adb = FindAdb();
     if (adb.empty()) {
-        err = "Не найден adb.exe. Скачай Android Platform Tools и положи adb.exe (+AdbWinApi.dll, AdbWinUsbApi.dll) рядом с PhoneCam.";
+        err = TR("Не найден adb.exe. Скачай Android Platform Tools и положи adb.exe (+AdbWinApi.dll, AdbWinUsbApi.dll) рядом с PhoneCam.");
         return false;
     }
     wchar_t cmd[1024];
@@ -168,7 +169,7 @@ bool AdbForward(int port, std::string& err) {
     si.wShowWindow = SW_HIDE;
     PROCESS_INFORMATION pi{};
     if (!CreateProcessW(nullptr, cmd, nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, nullptr, &si, &pi)) {
-        err = "Не удалось запустить adb.exe";
+        err = TR("Не удалось запустить adb.exe");
         return false;
     }
     DWORD w = WaitForSingleObject(pi.hProcess, 15000);
@@ -177,7 +178,7 @@ bool AdbForward(int port, std::string& err) {
     CloseHandle(pi.hProcess);
     CloseHandle(pi.hThread);
     if (w != WAIT_OBJECT_0 || code != 0) {
-        err = "adb: телефон не найден по USB. Включи «Отладку по USB» и подтверди запрос на телефоне.";
+        err = TR("adb: телефон не найден по USB. Включи «Отладку по USB» и подтверди запрос на телефоне.");
         return false;
     }
     return true;
@@ -270,7 +271,7 @@ bool QueryCaps(const std::string& host_in, int port, bool usb, std::vector<CamCa
     bool ok = SendAll(s, q, (int)sizeof q - 1) && RecvLine(s, line);
     closesocket(s);
     if (!ok || line.rfind("PHC1 CAPS", 0) != 0) {
-        err = "Телефон не сообщил возможности камер (старая версия приложения?)";
+        err = TR("Телефон не сообщил возможности камер (старая версия приложения?)");
         return false;
     }
     const char* p = line.c_str() + 9;
@@ -340,16 +341,16 @@ void Client::SendCommand(const std::string& line) {
 
 void Client::Run() {
     while (running_) {
-        if (on_status_) on_status_(State::Connecting, "Подключение…");
+        if (on_status_) on_status_(State::Connecting, TR("Подключение…"));
         std::string err;
         bool clean = Session(err);
         if (!running_) break;
         Log("session ended: " + (err.empty() ? std::string("connection lost") : err));
-        if (on_status_) on_status_(State::Error, err.empty() ? "Соединение потеряно" : err);
+        if (on_status_) on_status_(State::Error, err.empty() ? TR("Соединение потеряно") : err);
         if (!cfg_.auto_reconnect && !clean) break;
         for (int i = 0; i < 20 && running_; i++) Sleep(100);
     }
-    if (on_status_) on_status_(State::Idle, "Отключено");
+    if (on_status_) on_status_(State::Idle, TR("Отключено"));
 }
 
 bool Client::Session(std::string& err) {
@@ -376,12 +377,12 @@ bool Client::Session(std::string& err) {
              cfg_.camera.c_str(), cfg_.high_speed ? " hs" : "");
     std::string line;
     if (!SendAll(s, hello, (int)strlen(hello)) || !RecvLine(s, line)) {
-        err = cfg_.usb ? "Телефон не ответил по USB. Приложение PhoneCam открыто?" : "Телефон не ответил";
+        err = cfg_.usb ? TR("Телефон не ответил по USB. Приложение PhoneCam открыто?") : TR("Телефон не ответил");
         close_sock();
         return false;
     }
     if (line.rfind("PHC1 OK", 0) != 0) {
-        err = line.rfind("PHC1 ERR ", 0) == 0 ? "Телефон: " + line.substr(9) : "Это не PhoneCam";
+        err = line.rfind("PHC1 ERR ", 0) == 0 ? TR("Телефон: ") + line.substr(9) : TR("Это не PhoneCam");
         close_sock();
         return false;
     }
@@ -400,8 +401,8 @@ bool Client::Session(std::string& err) {
         phone_note = p;
     }
     if (real_fps < cfg_.fps)
-        fps_note = "\nКамера телефона даёт максимум " + std::to_string(real_fps) + " к/с в " + std::to_string(w) + "x" +
-                   std::to_string(h) + " (выбрано " + std::to_string(cfg_.fps) + ")";
+        fps_note = TR("\nКамера телефона даёт максимум ") + std::to_string(real_fps) + TR(" к/с в ") + std::to_string(w) + "x" +
+                   std::to_string(h) + TR(" (выбрано ") + std::to_string(cfg_.fps) + ")";
     phone_rotation_ = rot;
 
     Log("connected to " + host + ": " + line);
@@ -415,7 +416,7 @@ bool Client::Session(std::string& err) {
     if (!dec.Init(err)) { close_sock(); return false; }
 
     char st[128];
-    snprintf(st, sizeof st, "Идёт трансляция %dx%d @ %d fps%s", w, h, cfg_.fps, cfg_.usb ? " (USB)" : "");
+    snprintf(st, sizeof st, TR("Идёт трансляция %dx%d @ %d fps%s"), w, h, cfg_.fps, cfg_.usb ? " (USB)" : "");
     if (on_status_) on_status_(State::Streaming, st);
 
     // From here on use a 1 s receive timeout so stats keep updating even if the phone goes quiet.
@@ -477,33 +478,33 @@ bool Client::Session(std::string& err) {
         if (now - stat_t0 < 1000) return;
         double sec = (now - stat_t0) / 1000.0;
         char sb[400];
-        snprintf(sb, sizeof sb, "%dx%d@%d%s • приём %.0f к/с (%.1f Мбит/с) • вывод %.0f к/с%s%s%s",
+        snprintf(sb, sizeof sb, TR("%dx%d@%d%s • приём %.0f к/с (%.1f Мбит/с) • вывод %.0f к/с%s%s%s"),
                  w, h, real_fps, cfg_.usb ? " USB" : "", pk_in / sec, bytes * 8 / sec / 1e6, decoded / sec,
-                 errors ? " • ошибок декодера " : "", errors ? std::to_string(errors).c_str() : "",
-                 skipped ? (" • пропущено " + std::to_string(skipped)).c_str() : "");
+                 errors ? TR(" • ошибок декодера ") : "", errors ? std::to_string(errors).c_str() : "",
+                 skipped ? (TR(" • пропущено ") + std::to_string(skipped)).c_str() : "");
         std::string msg = sb;
         if (lat_n) {
             char lb[160];
-            snprintf(lb, sizeof lb, "\nЗадержка ≈ %lld мс (макс %lld) • декодер %.1f мс/кадр%s",
+            snprintf(lb, sizeof lb, TR("\nЗадержка ≈ %lld мс (макс %lld) • декодер %.1f мс/кадр%s"),
                      (long long)(lat_sum / lat_n / 1000), (long long)(lat_max / 1000),
                      dec_n ? dec_sum / (double)dec_n / 1000.0 : 0.0,
-                     resyncs ? (" • догоняли " + std::to_string(resyncs) + " раз").c_str() : "");
+                     resyncs ? (TR(" • догоняли ") + std::to_string(resyncs) + TR(" раз")).c_str() : "");
             msg += lb;
         }
         msg += fps_note;
-        if (!ev_hw_) msg += "\nЭкспозиция делается на ПК: камера телефона её игнорирует";
+        if (!ev_hw_) msg += TR("\nЭкспозиция делается на ПК: камера телефона её игнорирует");
         if (auto_bri_) {
             char ab[96];
             double k;
             { std::lock_guard<std::mutex> lk(adj_mu_); k = auto_k_; }
-            if (k > 1.03) snprintf(ab, sizeof ab, "\nУмная яркость: мало света, осветляет (усиление ×%.1f)", k);
-            else snprintf(ab, sizeof ab, "\nУмная яркость: света хватает, не вмешивается");
+            if (k > 1.03) snprintf(ab, sizeof ab, TR("\nУмная яркость: мало света, осветляет (усиление ×%.1f)"), k);
+            else snprintf(ab, sizeof ab, TR("\nУмная яркость: света хватает, не вмешивается"));
             msg += ab;
         }
         lat_sum = lat_max = dec_sum = 0;
         lat_n = dec_n = 0;
         if (!phone_note.empty()) msg += "\n" + phone_note;
-        if (!phone_stats.empty()) msg += "\nТелефон: " + phone_stats;
+        if (!phone_stats.empty()) msg += TR("\nТелефон: ") + phone_stats;
         if (on_status_) on_status_(State::Streaming, msg);
         pk_in = skipped = decoded = errors = 0;
         bytes = 0;
@@ -528,13 +529,13 @@ bool Client::Session(std::string& err) {
 
     while (running_) {
         uint8_t hdr[13];
-        if (!recv_all(hdr, 13)) { err = "Соединение с телефоном потеряно"; break; }
+        if (!recv_all(hdr, 13)) { err = TR("Соединение с телефоном потеряно"); break; }
         uint32_t len = BE32(hdr);
         int type = hdr[4];
         int64_t pts = BE64(hdr + 5);
-        if (len > 16 * 1024 * 1024) { err = "Повреждённые данные"; break; }
+        if (len > 16 * 1024 * 1024) { err = TR("Повреждённые данные"); break; }
         payload.resize(len);
-        if (len && !recv_all(payload.data(), (int)len)) { err = "Соединение с телефоном потеряно"; break; }
+        if (len && !recv_all(payload.data(), (int)len)) { err = TR("Соединение с телефоном потеряно"); break; }
         bytes += len + 13;
         if (type == 4) {
             if (len >= 2) phone_rotation_ = payload[0] << 8 | payload[1];
@@ -738,26 +739,26 @@ bool Client::SessionWeb(std::string& err) {
         std::string msg;
         if (video) {
             char b[300];
-            snprintf(b, sizeof b, "%dx%d • приём %.0f к/с (%.1f Мбит/с) • вывод %.0f к/с • через Телеграм/браузер",
+            snprintf(b, sizeof b, TR("%dx%d • приём %.0f к/с (%.1f Мбит/с) • вывод %.0f к/с • через Телеграм/браузер"),
                      w, h, st.frames / sec, bytes * 8 / sec / 1e6, decoded / sec);
             msg = b;
             if (st.lost || st.nacks) {
-                snprintf(b, sizeof b, "\nСеть: потеряно пакетов %llu, повторно запрошено %llu",
+                snprintf(b, sizeof b, TR("\nСеть: потеряно пакетов %llu, повторно запрошено %llu"),
                          (unsigned long long)st.lost, (unsigned long long)st.nacks);
                 msg += b;
             }
-            if (errors) msg += "\nОшибок декодера: " + std::to_string(errors);
-            if (!ev_hw_) msg += "\nЭкспозиция делается на ПК: камера телефона её не умеет";
+            if (errors) msg += TR("\nОшибок декодера: ") + std::to_string(errors);
+            if (!ev_hw_) msg += TR("\nЭкспозиция делается на ПК: камера телефона её не умеет");
             if (auto_bri_) {
                 double k;
                 { std::lock_guard<std::mutex> lk(adj_mu_); k = auto_k_; }
                 char ab[96];
-                if (k > 1.03) snprintf(ab, sizeof ab, "\nУмная яркость: мало света, осветляет (усиление ×%.1f)", k);
-                else snprintf(ab, sizeof ab, "\nУмная яркость: света хватает, не вмешивается");
+                if (k > 1.03) snprintf(ab, sizeof ab, TR("\nУмная яркость: мало света, осветляет (усиление ×%.1f)"), k);
+                else snprintf(ab, sizeof ab, TR("\nУмная яркость: света хватает, не вмешивается"));
                 msg += ab;
             }
             std::lock_guard<std::mutex> lk(info_mu);
-            if (!phone_stats.empty()) msg += "\nТелефон: " + phone_stats;
+            if (!phone_stats.empty()) msg += TR("\nТелефон: ") + phone_stats;
             streaming = true;
             if (on_status_) on_status_(State::Streaming, msg);
         } else {
@@ -765,11 +766,11 @@ bool Client::SessionWeb(std::string& err) {
             streaming = false;
             int up = brokers_up;
             double waited = std::chrono::duration<double>(now - t0).count();
-            if (phone_connected) msg = "Телефон подключён, ждём картинку…";
-            else if (up > 0) msg = "Ждём телефон. Код: " + code_txt +
-                                   "\nНаведи камеру телефона на QR-код (бот @phonecamweb_bot в Телеграме) или введи код в боте.";
-            else if (waited < 8) msg = "Подключение к серверу связи…";
-            else msg = "Нет связи с сервером. Проверь интернет на ПК (нужен выход в интернет, порт 1883).";
+            if (phone_connected) msg = TR("Телефон подключён, ждём картинку…");
+            else if (up > 0) msg = TR("Ждём телефон. Код: ") + code_txt +
+                                   TR("\nНаведи камеру телефона на QR-код (бот @phonecamweb_bot в Телеграме) или введи код в боте.");
+            else if (waited < 8) msg = TR("Подключение к серверу связи…");
+            else msg = TR("Нет связи с сервером. Проверь интернет на ПК (нужен выход в интернет, порт 1883).");
             if (on_status_) on_status_(State::Connecting, msg);
         }
         decoded = errors = 0;

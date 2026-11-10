@@ -13,6 +13,7 @@
 
 #include "h264_decoder.h"
 #include "phonecam_client.h"
+#include "i18n.h"
 
 // GUIDs defined locally so we don't need mfuuid.lib / wmcodecdsp.lib.
 DEFINE_GUID(PC_CLSID_CMSH264DecoderMFT, 0x62CE7E72, 0x4C71, 0x4d20, 0xB1, 0x5D, 0x45, 0x28, 0x31, 0xA8, 0x7D, 0x9D);
@@ -68,12 +69,12 @@ bool H264Decoder::Init(std::string& err) {
     HRESULT hr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     d_->com_inited = SUCCEEDED(hr);
     hr = MFStartup(MF_VERSION, MFSTARTUP_NOSOCKET);
-    if (FAILED(hr)) { err = "MFStartup failed " + Hex(hr) + " (нет Media Feature Pack?)"; return false; }
+    if (FAILED(hr)) { err = "MFStartup failed " + Hex(hr) + TR(" (нет Media Feature Pack?)"); return false; }
     d_->mf_started = true;
 
     hr = CoCreateInstance(PC_CLSID_CMSH264DecoderMFT, nullptr, CLSCTX_INPROC_SERVER, PC_IID_IMFTransform,
                           (void**)&d_->mft);
-    if (FAILED(hr)) { err = "Не найден H.264 декодер Windows " + Hex(hr) + " (установи Media Feature Pack для N-версий)"; return false; }
+    if (FAILED(hr)) { err = TR("Не найден H.264 декодер Windows ") + Hex(hr) + TR(" (установи Media Feature Pack для N-версий)"); return false; }
 
     IMFAttributes* attrs = nullptr;
     if (SUCCEEDED(d_->mft->GetAttributes(&attrs)) && attrs) {
@@ -94,7 +95,7 @@ bool H264Decoder::Init(std::string& err) {
     in->Release();
     if (FAILED(hr)) { err = "SetInputType " + Hex(hr); return false; }
 
-    if (!NegotiateOutput()) { err = "Декодер не отдаёт NV12"; return false; }
+    if (!NegotiateOutput()) { err = TR("Декодер не отдаёт NV12"); return false; }
     d_->mft->ProcessMessage(MFT_MESSAGE_COMMAND_FLUSH, 0);
     d_->mft->ProcessMessage(MFT_MESSAGE_NOTIFY_BEGIN_STREAMING, 0);
     d_->mft->ProcessMessage(MFT_MESSAGE_NOTIFY_START_OF_STREAM, 0);
@@ -172,7 +173,7 @@ bool H264Decoder::Drain(const std::function<void(const Frame&)>& on_frame, std::
         }
         if (hr == MF_E_TRANSFORM_STREAM_CHANGE) {
             SafeRelease(sample);
-            if (!NegotiateOutput()) { err = "смена формата не удалась"; return false; }
+            if (!NegotiateOutput()) { err = TR("смена формата не удалась"); return false; }
             continue;
         }
         if (FAILED(hr)) {
@@ -222,7 +223,7 @@ bool H264Decoder::Drain(const std::function<void(const Frame&)>& on_frame, std::
 bool H264Decoder::Decode(const uint8_t* data, size_t size, int64_t pts_us,
                          const std::function<void(const Frame&)>& on_frame, std::string& err) {
     IMFMediaBuffer* buf = nullptr;
-    if (FAILED(MFCreateMemoryBuffer((DWORD)size, &buf))) { err = "нет памяти"; return false; }
+    if (FAILED(MFCreateMemoryBuffer((DWORD)size, &buf))) { err = TR("нет памяти"); return false; }
     BYTE* p = nullptr;
     buf->Lock(&p, nullptr, nullptr);
     memcpy(p, data, size);

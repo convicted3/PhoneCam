@@ -101,7 +101,7 @@ public class MainActivity extends Activity implements StreamServer.Host {
                 screenLight = new FrameLayout(this);
                 screenLight.setBackgroundColor(Color.WHITE);
                 TextView t = new TextView(this);
-                t.setText("Подсветка экраном\nкоснись, чтобы выключить");
+                t.setText(L.t("Подсветка экраном\nкоснись, чтобы выключить"));
                 t.setTextColor(Color.rgb(170, 170, 170));
                 t.setTextSize(13);
                 t.setGravity(Gravity.CENTER);
@@ -128,8 +128,8 @@ public class MainActivity extends Activity implements StreamServer.Host {
 
     private void setTorchUi(boolean on) {
         torchUi = on;
-        String name = server != null && server.frontCamera() ? "Подсветка" : "Фонарик";
-        torchButton.setText(name + (on ? ": вкл" : ": выкл"));
+        String name = server != null && server.frontCamera() ? L.t("Подсветка") : L.t("Фонарик");
+        torchButton.setText(name + (on ? L.t(": вкл") : L.t(": выкл")));
         GradientDrawable d = new GradientDrawable();
         d.setColor(on ? Color.rgb(76, 201, 140) : Color.rgb(40, 44, 56));
         d.setCornerRadius(dp(10));
@@ -183,7 +183,7 @@ public class MainActivity extends Activity implements StreamServer.Host {
         root.addView(previewBox);
 
         TextView noPrev = new TextView(this);
-        noPrev.setText("Превью появится после подключения");
+        noPrev.setText(L.t("Превью появится после подключения"));
         noPrev.setTextColor(Color.rgb(110, 116, 130));
         noPrev.setGravity(Gravity.CENTER);
         previewBox.addView(noPrev, new FrameLayout.LayoutParams(-1, -1));
@@ -225,7 +225,7 @@ public class MainActivity extends Activity implements StreamServer.Host {
         title.setTypeface(Typeface.DEFAULT_BOLD);
         titles.addView(title);
         TextView sub = new TextView(this);
-        sub.setText("телефон как вебкамера");
+        sub.setText(L.t("телефон как вебкамера"));
         sub.setTextColor(Color.rgb(150, 156, 170));
         sub.setTextSize(13);
         titles.addView(sub);
@@ -235,7 +235,7 @@ public class MainActivity extends Activity implements StreamServer.Host {
         LinearLayout.LayoutParams hlp0 = new LinearLayout.LayoutParams(-1, -2);
         info.addView(head, hlp0);
 
-        TextView ipLabel = label("IP-адрес для подключения");
+        TextView ipLabel = label(L.t("IP-адрес для подключения"));
         ((LinearLayout.LayoutParams) ipLabel.getLayoutParams()).topMargin = dp(16);
         info.addView(ipLabel, ipLabel.getLayoutParams());
 
@@ -246,27 +246,27 @@ public class MainActivity extends Activity implements StreamServer.Host {
         info.addView(ipText);
 
         TextView portText = new TextView(this);
-        portText.setText("Порт " + Protocol.TCP_PORT + "  •  USB: включи «Отладку по USB»");
+        portText.setText(L.t("Порт ") + Protocol.TCP_PORT + L.t("  •  USB: включи «Отладку по USB»"));
         portText.setTextColor(Color.rgb(150, 156, 170));
         portText.setTextSize(13);
         info.addView(portText);
 
-        TextView stLabel = label("Статус");
+        TextView stLabel = label(L.t("Статус"));
         ((LinearLayout.LayoutParams) stLabel.getLayoutParams()).topMargin = dp(16);
         info.addView(stLabel, stLabel.getLayoutParams());
 
         statusText = new TextView(this);
         statusText.setTextColor(Color.WHITE);
         statusText.setTextSize(15);
-        statusText.setText("Запуск…");
+        statusText.setText(L.t("Запуск…"));
         info.addView(statusText);
 
         // three compact buttons in one row: always fully visible in both orientations
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         orientButton = flatButton("");
-        dimButton = flatButton("Затемнить");
-        Button camsButton = flatButton("Инфо камер");
+        dimButton = flatButton(L.t("Затемнить"));
+        Button camsButton = flatButton(L.t("Инфо камер"));
         Button[] bs = {orientButton, dimButton, camsButton};
         for (int k = 0; k < bs.length; k++) {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(44), 1f);
@@ -290,10 +290,10 @@ public class MainActivity extends Activity implements StreamServer.Host {
         LinearLayout row2 = new LinearLayout(this);
         row2.setOrientation(LinearLayout.HORIZONTAL);
         row2.setGravity(Gravity.CENTER_VERTICAL);
-        torchButton = flatButton("Фонарик: выкл");
+        torchButton = flatButton(L.t("Фонарик: выкл"));
         row2.addView(torchButton, new LinearLayout.LayoutParams(dp(130), dp(44)));
         TextView zl = new TextView(this);
-        zl.setText("Зум");
+        zl.setText(L.t("Зум"));
         zl.setTextColor(Color.rgb(150, 156, 170));
         zl.setTextSize(13);
         LinearLayout.LayoutParams zlp = new LinearLayout.LayoutParams(-2, -2);
@@ -311,7 +311,7 @@ public class MainActivity extends Activity implements StreamServer.Host {
         r2lp.topMargin = dp(10);
         info.addView(row2, r2lp);
         TextView tzHint = new TextView(this);
-        tzHint.setText("Если фонарик или зум не отвечают - переподключись к ПК.");
+        tzHint.setText(L.t("Если фонарик или зум не отвечают - переподключись к ПК."));
         tzHint.setTextColor(Color.rgb(150, 156, 170));
         tzHint.setTextSize(12);
         LinearLayout.LayoutParams tzlp = new LinearLayout.LayoutParams(-1, -2);
@@ -319,7 +319,7 @@ public class MainActivity extends Activity implements StreamServer.Host {
         info.addView(tzHint, tzlp);
         torchButton.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                if (!server.streaming()) { statusText.setText("Фонарик и зум работают во время трансляции"); return; }
+                if (!server.streaming()) { statusText.setText(L.t("Фонарик и зум работают во время трансляции")); return; }
                 setTorchUi(!torchUi);
                 server.localTorch(torchUi);
             }
@@ -337,8 +337,8 @@ public class MainActivity extends Activity implements StreamServer.Host {
         hintText = new TextView(this);
         hintText.setTextColor(Color.rgb(150, 156, 170));
         hintText.setTextSize(12);
-        hintText.setText("Не сворачивай приложение во время трансляции. Экран можно затемнить. "
-                + "Кнопка «Видео» переключает ориентацию картинки на ПК (горизонтальная или вертикальная), экран приложения поворачивается сам.");
+        hintText.setText(L.t("Не сворачивай приложение во время трансляции. Экран можно затемнить. "
+                + "Кнопка «Видео» переключает ориентацию картинки на ПК (горизонтальная или вертикальная), экран приложения поворачивается сам."));
         LinearLayout.LayoutParams hlp = new LinearLayout.LayoutParams(-1, -2);
         hlp.topMargin = dp(12);
         info.addView(hintText, hlp);
@@ -380,7 +380,7 @@ public class MainActivity extends Activity implements StreamServer.Host {
     }
 
     private void updateOrientButton() {
-        if (orientButton != null) orientButton.setText(portraitMode ? "Видео: вертик." : "Видео: горизонт.");
+        if (orientButton != null) orientButton.setText(portraitMode ? L.t("Видео: вертик.") : L.t("Видео: горизонт."));
     }
 
     /** Switch ONLY the video orientation sent to the PC (the screen keeps following the phone). */
@@ -432,17 +432,17 @@ public class MainActivity extends Activity implements StreamServer.Host {
         tv.setPadding(dp(16), dp(12), dp(16), dp(12));
         sv.addView(tv);
         new android.app.AlertDialog.Builder(this)
-                .setTitle("Что камеры сообщают приложениям")
+                .setTitle(L.t("Что камеры сообщают приложениям"))
                 .setView(sv)
-                .setPositiveButton("Скопировать", new android.content.DialogInterface.OnClickListener() {
+                .setPositiveButton(L.t("Скопировать"), new android.content.DialogInterface.OnClickListener() {
                     @Override public void onClick(android.content.DialogInterface d, int w) {
                         android.content.ClipboardManager cm =
                                 (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                         if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("PhoneCam", report));
-                        android.widget.Toast.makeText(MainActivity.this, "Скопировано", android.widget.Toast.LENGTH_SHORT).show();
+                        android.widget.Toast.makeText(MainActivity.this, L.t("Скопировано"), android.widget.Toast.LENGTH_SHORT).show();
                     }
                 })
-                .setNegativeButton("Закрыть", null)
+                .setNegativeButton(L.t("Закрыть"), null)
                 .show();
     }
 
@@ -461,7 +461,7 @@ public class MainActivity extends Activity implements StreamServer.Host {
         WindowManager.LayoutParams lp = getWindow().getAttributes();
         lp.screenBrightness = d ? 0.01f : WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE;
         getWindow().setAttributes(lp);
-        dimButton.setText(d ? "Вернуть яркость" : "Затемнить экран");
+        dimButton.setText(d ? L.t("Вернуть яркость") : L.t("Затемнить экран"));
     }
 
     @Override
@@ -470,7 +470,7 @@ public class MainActivity extends Activity implements StreamServer.Host {
         refreshIps();
         if (Build.VERSION.SDK_INT >= 23
                 && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            statusText.setText("Нужно разрешение на камеру");
+            statusText.setText(L.t("Нужно разрешение на камеру"));
             requestPermissions(new String[]{Manifest.permission.CAMERA}, REQ_CAMERA);
             return;
         }
@@ -481,7 +481,7 @@ public class MainActivity extends Activity implements StreamServer.Host {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] results) {
         if (requestCode == REQ_CAMERA) {
             if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) startServer();
-            else statusText.setText("Без разрешения на камеру приложение не работает");
+            else statusText.setText(L.t("Без разрешения на камеру приложение не работает"));
         }
     }
 
@@ -536,7 +536,7 @@ public class MainActivity extends Activity implements StreamServer.Host {
                 }
             }
         } catch (Exception ignored) {}
-        ipText.setText(sb.length() > 0 ? sb.toString() : "нет Wi-Fi (можно по USB)");
+        ipText.setText(sb.length() > 0 ? sb.toString() : L.t("нет Wi-Fi (можно по USB)"));
     }
 
     // ---- StreamServer.Host ----

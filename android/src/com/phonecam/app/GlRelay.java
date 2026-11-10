@@ -80,7 +80,7 @@ final class GlRelay implements SurfaceTexture.OnFrameAvailableListener {
                 done.countDown();
             }
         });
-        if (!done.await(5, TimeUnit.SECONDS)) throw new Exception("GL не запустился");
+        if (!done.await(5, TimeUnit.SECONDS)) throw new Exception(L.t("GL не запустился"));
         if (err[0] != null) { release(); throw err[0]; }
         return cameraSurface;
     }

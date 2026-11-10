@@ -426,7 +426,7 @@ final class CameraStreamer {
                 }
                 c.configure(f, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
                 encoderInfo = c.getName() + " " + (profile == 8 ? "High" : profile == 2 ? "Main" : profile == 1 ? "Baseline" : "auto")
-                        + ", цель " + (kbps / 1000.0) + " Мбит/с" + (intraRefresh ? ", intra-refresh" : "");
+                        + L.t(", цель ") + (kbps / 1000.0) + L.t(" Мбит/с") + (intraRefresh ? ", intra-refresh" : "");
                 Log.i(TAG, "encoder " + encoderInfo + " " + w + "x" + h + "@" + fps + " level 0x" + Integer.toHexString(level));
                 return c;
             } catch (Exception e) {
@@ -435,7 +435,7 @@ final class CameraStreamer {
                 c.release();
             }
         }
-        throw last != null ? last : new Exception("кодер H.264 не настроился");
+        throw last != null ? last : new Exception(L.t("кодер H.264 не настроился"));
     }
 
     static final class HighSpeedPlan { Range<Integer> range; int keepEvery; }
@@ -482,7 +482,7 @@ final class CameraStreamer {
         camHandler = new Handler(camThread.getLooper());
 
         Choice choice = chooseCamera(r);
-        if (choice == null) throw new Exception("на телефоне нет камеры");
+        if (choice == null) throw new Exception(L.t("на телефоне нет камеры"));
         String id = choice.id;
         CameraCharacteristics cc = choice.cc;
         currentChars = cc;
@@ -515,7 +515,7 @@ final class CameraStreamer {
             hs = highSpeedPlan(cc, size, r.fps);
             if (hs != null) fps = r.fps;
         }
-        String hsNote = r.highSpeed && fps < r.fps ? "скоростной режим недоступен для " + w + "x" + h : "";
+        String hsNote = r.highSpeed && fps < r.fps ? L.t("скоростной режим недоступен для ") + w + "x" + h : "";
 
         // Android 10+: camera writes 120 fps straight into the encoder, the encoder input keeps only `fps`.
         boolean hsDirect = hs != null && Build.VERSION.SDK_INT >= 29;
@@ -582,28 +582,28 @@ final class CameraStreamer {
                 @Override public void onOpened(CameraDevice cam) { device = cam; opened.countDown(); }
                 @Override public void onDisconnected(CameraDevice cam) {
                     cam.close();
-                    if (device == null) { err[0] = "камера занята другим приложением"; opened.countDown(); }
-                    else fail("камера отключена системой");
+                    if (device == null) { err[0] = L.t("камера занята другим приложением"); opened.countDown(); }
+                    else fail(L.t("камера отключена системой"));
                 }
                 @Override public void onError(CameraDevice cam, int error) {
                     cam.close();
-                    if (device == null) { err[0] = "ошибка открытия камеры (" + error + ")"; opened.countDown(); }
-                    else fail("ошибка камеры (" + error + ")");
+                    if (device == null) { err[0] = L.t("ошибка открытия камеры (") + error + ")"; opened.countDown(); }
+                    else fail(L.t("ошибка камеры (") + error + ")");
                 }
             }, camHandler);
         } catch (SecurityException se) {
             stopLocked();
-            throw new Exception("нет разрешения на камеру");
+            throw new Exception(L.t("нет разрешения на камеру"));
         }
         if (!opened.await(5, TimeUnit.SECONDS) || device == null) {
             stopLocked();
-            throw new Exception(err[0] != null ? err[0] : "камера не открылась");
+            throw new Exception(err[0] != null ? err[0] : L.t("камера не открылась"));
         }
 
         if (hs != null) {
             try {
                 startHighSpeedSession(targets, hs, st);
-                fpsRangeText = "скоростной " + hs.range + " -> " + fps + (relay != null ? " через GL" : " через кодер") + ", камера " + id;
+                fpsRangeText = L.t("скоростной ") + hs.range + " -> " + fps + (relay != null ? L.t(" через GL") : L.t(" через кодер")) + L.t(", камера ") + id;
                 return st;
             } catch (Exception e) {
                 Log.w(TAG, "high-speed session failed, falling back", e);
@@ -612,7 +612,7 @@ final class CameraStreamer {
                 nr.width = r.width; nr.height = r.height; nr.fps = r.fps; nr.kbps = r.kbps; nr.camera = r.camera;
                 nr.highSpeed = false;
                 Started fb = start(nr, previewTex, sink);
-                fb.note = "скоростной режим не запустился (" + e.getMessage() + "), обычный режим";
+                fb.note = L.t("скоростной режим не запустился (") + e.getMessage() + L.t("), обычный режим");
                 return fb;
             }
         }
@@ -636,7 +636,7 @@ final class CameraStreamer {
                 }, camHandler);
                 c2.await(5, TimeUnit.SECONDS);
             }
-            if (!ok[0]) { stopLocked(); throw new Exception("не удалось настроить камеру"); }
+            if (!ok[0]) { stopLocked(); throw new Exception(L.t("не удалось настроить камеру")); }
         }
 
         requestTargets = new ArrayList<Surface>(targets);
@@ -649,7 +649,7 @@ final class CameraStreamer {
         Range<Integer> fpsRange = choice.range;
         if (fpsRange != null) builder.set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, fpsRange);
         fpsRangeText = (fpsRange != null ? fpsRange.getLower() + "-" + fpsRange.getUpper() : "auto")
-                + ", камера " + id + ", макс " + choice.maxFps;
+                + L.t(", камера ") + id + L.t(", макс ") + choice.maxFps;
         builder.set(CaptureRequest.CONTROL_AE_MODE, CaptureRequest.CONTROL_AE_MODE_ON);
         applyControls();
         return st;
@@ -685,7 +685,7 @@ final class CameraStreamer {
             threw = true;
         }
         if (threw || !configured.await(5, TimeUnit.SECONDS) || !ok[0]) {
-            if (previewSurface == null) throw new Exception("сессия не настроилась");
+            if (previewSurface == null) throw new Exception(L.t("сессия не настроилась"));
             // retry with the relay surface only
             targets.remove(previewSurface);
             previewSurface.release();
@@ -697,7 +697,7 @@ final class CameraStreamer {
                 @Override public void onConfigured(CameraCaptureSession s) { got[0] = s; ok[0] = true; c2.countDown(); }
                 @Override public void onConfigureFailed(CameraCaptureSession s) { c2.countDown(); }
             }, camHandler);
-            if (!c2.await(5, TimeUnit.SECONDS) || !ok[0]) throw new Exception("сессия не настроилась");
+            if (!c2.await(5, TimeUnit.SECONDS) || !ok[0]) throw new Exception(L.t("сессия не настроилась"));
         }
         session = got[0];
         hsSession = (android.hardware.camera2.CameraConstrainedHighSpeedCaptureSession) got[0];
@@ -748,7 +748,7 @@ final class CameraStreamer {
             // Torch: officially not supported in high-speed sessions, but some cameras accept it anyway, so we try.
             // If the camera rejects the request, the torch is the first thing dropped (see dropOrder below).
             builder.set(CaptureRequest.FLASH_MODE, null);
-            if (torch && !hasFlash) info.append("фонарика нет");
+            if (torch && !hasFlash) info.append(L.t("фонарика нет"));
             // zoom: zoom ratio (Android 11+, can switch lenses) or crop region
             Range<Float> zr = null;
             if (Build.VERSION.SDK_INT >= 30 && cc != null) {
@@ -785,7 +785,7 @@ final class CameraStreamer {
                 if (hsSession == null) fm = torch ? CaptureRequest.FLASH_MODE_TORCH : CaptureRequest.FLASH_MODE_OFF;
                 else if (torch) fm = CaptureRequest.FLASH_MODE_TORCH;
                 else if (torchOffPending) fm = CaptureRequest.FLASH_MODE_OFF;
-                if (fm != null) opt.add(new Object[]{CaptureRequest.FLASH_MODE, fm, "фонарик"});
+                if (fm != null) opt.add(new Object[]{CaptureRequest.FLASH_MODE, fm, L.t("фонарик")});
             }
             String evText = "";
             if (cc != null) {
@@ -794,27 +794,27 @@ final class CameraStreamer {
                 if (evr != null && step != null && step.floatValue() > 0 && evr.getUpper() > evr.getLower()) {
                     int idx = Math.round(evCompensation / step.floatValue());
                     idx = Math.max(evr.getLower(), Math.min(evr.getUpper(), idx));
-                    opt.add(new Object[]{CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, idx, "экспозиция"});
+                    opt.add(new Object[]{CaptureRequest.CONTROL_AE_EXPOSURE_COMPENSATION, idx, L.t("экспозиция")});
                     evText = String.format(java.util.Locale.US, "EV %+.1f", idx * step.floatValue());
                 } else if (evCompensation != 0) {
-                    info.append(info.length() > 0 ? ", " : "").append("экспозиция не поддерживается");
+                    info.append(info.length() > 0 ? ", " : "").append(L.t("экспозиция не поддерживается"));
                 }
                 if (contains(cc.get(CameraCharacteristics.CONTROL_AWB_AVAILABLE_MODES), wbMode))
-                    opt.add(new Object[]{CaptureRequest.CONTROL_AWB_MODE, wbMode, "баланс белого"});
+                    opt.add(new Object[]{CaptureRequest.CONTROL_AWB_MODE, wbMode, L.t("баланс белого")});
                 if (edgeMode >= 0 && contains(cc.get(CameraCharacteristics.EDGE_AVAILABLE_EDGE_MODES), edgeMode))
-                    opt.add(new Object[]{CaptureRequest.EDGE_MODE, edgeMode, "резкость"});
+                    opt.add(new Object[]{CaptureRequest.EDGE_MODE, edgeMode, L.t("резкость")});
                 if (nrMode >= 0 && contains(cc.get(CameraCharacteristics.NOISE_REDUCTION_AVAILABLE_NOISE_REDUCTION_MODES), nrMode))
-                    opt.add(new Object[]{CaptureRequest.NOISE_REDUCTION_MODE, nrMode, "шумоподавление"});
+                    opt.add(new Object[]{CaptureRequest.NOISE_REDUCTION_MODE, nrMode, L.t("шумоподавление")});
                 Boolean aeL = cc.get(CameraCharacteristics.CONTROL_AE_LOCK_AVAILABLE);
-                if (aeL != null && aeL) opt.add(new Object[]{CaptureRequest.CONTROL_AE_LOCK, aeLock, "фикс. экспозиции"});
+                if (aeL != null && aeL) opt.add(new Object[]{CaptureRequest.CONTROL_AE_LOCK, aeLock, L.t("фикс. экспозиции")});
                 Boolean awbL = cc.get(CameraCharacteristics.CONTROL_AWB_LOCK_AVAILABLE);
-                if (awbL != null && awbL) opt.add(new Object[]{CaptureRequest.CONTROL_AWB_LOCK, awbLock, "фикс. баланса"});
+                if (awbL != null && awbL) opt.add(new Object[]{CaptureRequest.CONTROL_AWB_LOCK, awbLock, L.t("фикс. баланса")});
             }
             for (Object[] o : opt) setKey(builder, o[0], o[1]);
             List<String> dropped = new ArrayList<String>();
             // drop in this order until the camera accepts the request
-            String[] dropOrder = {"фонарик", "резкость", "шумоподавление", "баланс белого", "фикс. баланса", "фикс. экспозиции",
-                    "экспозиция", "зум", "триггер фокуса", "всё лишнее"};
+            String[] dropOrder = {L.t("фонарик"), L.t("резкость"), L.t("шумоподавление"), L.t("баланс белого"), L.t("фикс. баланса"), L.t("фикс. экспозиции"),
+                    L.t("экспозиция"), L.t("зум"), L.t("триггер фокуса"), L.t("всё лишнее")};
             int di = 0;
             String firstError = null;
             while (true) {
@@ -827,37 +827,37 @@ final class CameraStreamer {
                     String drop = dropOrder[di++];
                     boolean any = false;
                     for (Object[] o : opt) if (o[2].equals(drop)) { setKey(builder, o[0], null); any = true; }
-                    if (drop.equals("зум")) {
+                    if (drop.equals(L.t("зум"))) {
                         builder.set(CaptureRequest.SCALER_CROP_REGION, null);
                         try {
                             setKey(builder, CaptureRequest.class.getField("CONTROL_ZOOM_RATIO").get(null), null);
                         } catch (Throwable ignored) {}
                         any = true;
-                    } else if (drop.equals("триггер фокуса")) {
+                    } else if (drop.equals(L.t("триггер фокуса"))) {
                         builder.set(CaptureRequest.CONTROL_AF_TRIGGER, null);
                         any = true;
-                    } else if (drop.equals("всё лишнее")) {
+                    } else if (drop.equals(L.t("всё лишнее"))) {
                         builder = baseRequest();   // keep the stream alive no matter what
                         any = true;
                     }
                     if (any) dropped.add(drop);
                 }
             }
-            if (dropped.contains("экспозиция") || dropped.contains("всё лишнее")) setEvEffective(false);
-            torchDropped = torch && (dropped.contains("фонарик") || dropped.contains("всё лишнее"));
-            dropped.remove("фонарик");  // reported by torchStatus() instead
+            if (dropped.contains(L.t("экспозиция")) || dropped.contains(L.t("всё лишнее"))) setEvEffective(false);
+            torchDropped = torch && (dropped.contains(L.t("фонарик")) || dropped.contains(L.t("всё лишнее")));
+            dropped.remove(L.t("фонарик"));  // reported by torchStatus() instead
             if (firstError != null) {
                 String m = firstError.length() > 90 ? firstError.substring(0, 90) + "…" : firstError;
-                info.append(info.length() > 0 ? ", " : "").append("ошибка камеры: ").append(m);
+                info.append(info.length() > 0 ? ", " : "").append(L.t("ошибка камеры: ")).append(m);
             }
-            if (!evText.isEmpty() && !dropped.contains("экспозиция") && evCompensation != 0)
+            if (!evText.isEmpty() && !dropped.contains(L.t("экспозиция")) && evCompensation != 0)
                 info.append(info.length() > 0 ? ", " : "").append(evText);
             if (!dropped.isEmpty())
-                info.append(info.length() > 0 ? ", " : "").append("камера не приняла: ").append(android.text.TextUtils.join(", ", dropped));
+                info.append(info.length() > 0 ? ", " : "").append(L.t("камера не приняла: ")).append(android.text.TextUtils.join(", ", dropped));
             controlsInfo = info.toString();
         } catch (Exception e) {
             Log.w(TAG, "applyControls", e);
-            controlsInfo = "настройки камеры не применились: " + e.getClass().getSimpleName() + " " + e.getMessage();
+            controlsInfo = L.t("настройки камеры не применились: ") + e.getClass().getSimpleName() + " " + e.getMessage();
         }
     }
 
@@ -930,8 +930,8 @@ final class CameraStreamer {
     /** Live torch status for the stats line ("" when the torch is off). */
     String torchStatus() {
         if (!torch || !hasFlash) return "";
-        if (torchDropped) return "фонарик: камера отклонила команду" + (hsSession != null ? " в режиме 60 FPS" : "");
-        return "фонарик включён";
+        if (torchDropped) return L.t("фонарик: камера отклонила команду") + (hsSession != null ? L.t(" в режиме 60 FPS") : "");
+        return L.t("фонарик включён");
     }
 
     // ---- does the camera really change its exposure when we ask? (some ignore it, e.g. in 60 FPS mode) ----
@@ -986,7 +986,7 @@ final class CameraStreamer {
         try {
             if (builder == null || session == null) return;
             if (!hasAutoAf) {
-                focusInfo = "у этой камеры фиксированный фокус";
+                focusInfo = L.t("у этой камеры фиксированный фокус");
                 focusInfoUntil = System.currentTimeMillis() + 4000;
                 return;
             }
@@ -1006,7 +1006,7 @@ final class CameraStreamer {
             if (hsSession != null) hsSession.captureBurst(hsSession.createHighSpeedRequestList(builder.build()), countFrames, camHandler);
             else session.capture(builder.build(), countFrames, camHandler);
             builder.set(CaptureRequest.CONTROL_AF_TRIGGER, CaptureRequest.CONTROL_AF_TRIGGER_IDLE);
-            focusInfo = "фокусируюсь…";
+            focusInfo = L.t("фокусируюсь…");
             focusInfoUntil = System.currentTimeMillis() + 4000;
             Handler h = camHandler;
             if (h != null) {
@@ -1018,7 +1018,7 @@ final class CameraStreamer {
             }
         } catch (Exception e) {
             Log.w(TAG, "af", e);
-            focusInfo = "камера не дала сфокусироваться";
+            focusInfo = L.t("камера не дала сфокусироваться");
             focusInfoUntil = System.currentTimeMillis() + 4000;
         }
     }
@@ -1041,9 +1041,9 @@ final class CameraStreamer {
     /** Short-lived focus status for the stats line. */
     String focusStatus() {
         if (System.currentTimeMillis() > focusInfoUntil) return "";
-        if (focusInfo.startsWith("фокусируюсь")) {
-            if (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED) return "фокус наведён";
-            if (afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED) return "фокус: не удалось навести";
+        if (focusInfo.startsWith(L.t("фокусируюсь"))) {
+            if (afState == CaptureResult.CONTROL_AF_STATE_FOCUSED_LOCKED) return L.t("фокус наведён");
+            if (afState == CaptureResult.CONTROL_AF_STATE_NOT_FOCUSED_LOCKED) return L.t("фокус: не удалось навести");
         }
         return focusInfo;
     }
@@ -1115,7 +1115,7 @@ final class CameraStreamer {
                 } catch (Exception e) {
                     if (running) {
                         Log.w(TAG, "drain", e);
-                        fail("ошибка кодировщика");
+                        fail(L.t("ошибка кодировщика"));
                     }
                 }
             }

@@ -1,5 +1,6 @@
 // See web_link.h. Portable (Windows + POSIX) so it can be tested on Linux against a real browser.
 #include "web_link.h"
+#include "i18n.h"
 
 #include <rtc/rtc.hpp>
 
@@ -903,7 +904,7 @@ bool WebLink::Start(const WebLinkConfig& cfg, Callbacks cb, std::string& err) {
     d_.reset(new Impl);
     d_->cfg = cfg;
     d_->cb = std::move(cb);
-    if (d_->cfg.code.empty()) { err = "Нет кода"; return false; }
+    if (d_->cfg.code.empty()) { err = TR("Нет кода"); return false; }
     d_->topic = PairTopic(d_->cfg.code);
     std::vector<std::string> list = cfg.brokers;
     if (list.empty()) list = {"broker.emqx.io:1883", "broker.hivemq.com:1883", "test.mosquitto.org:1883"};
